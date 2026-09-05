@@ -115,6 +115,49 @@ export const CaptainAuthProvider = ({ children }) => {
     return () => clearInterval(interval);
   }, [checkActiveRide]);
 
+  // Resilient fallback: Check active broadcasting orders within 2km if waiting
+  const checkActiveBroadcastOrder = useCallback(async () => {
+    if (!isOnline || activeRide || incomingRequest) return;
+    try {
+      const cptId = captain?.id || captain?._id || captain?.code || 'cpt_a';
+      const res = await api.get(`/captains/active-order?captainId=${cptId}&lat=${currentLocation.lat}&lng=${currentLocation.lng}`);
+      if (res.success && res.activeOrder && res.activeOrder.status === 'SEARCHING_DRIVER') {
+        const order = res.activeOrder;
+        const myVType = (captain?.vehicleType || 'BIKE').toUpperCase();
+        const ordVType = (order.vehicleType || 'BIKE').toUpperCase();
+        if (myVType !== ordVType) return;
+
+        if (order.pickupLocation?.lat && order.pickupLocation?.lng) {
+          const distKm = calculateDistanceKm(
+            currentLocation.lat,
+            currentLocation.lng,
+            order.pickupLocation.lat,
+            order.pickupLocation.lng
+          );
+          if (distKm <= 2.0) {
+            console.log('[Poll] Active order within 2km detected:', order.id);
+            setIncomingRequest({
+              ...order,
+              rideId: order.id,
+              ride_id: order.id,
+              estimatedFare: order.fareBreakdown?.totalFare || 50,
+            });
+            addToast(`🔔 New Ride Request: ₹${order.fareBreakdown?.totalFare || 50} • ${distKm.toFixed(1)} km away`, 'warning');
+            playBeepSound();
+          }
+        }
+      }
+    } catch (err) {
+      // non-blocking
+    }
+  }, [isOnline, activeRide, incomingRequest, captain, currentLocation, addToast]);
+
+  useEffect(() => {
+    if (!isOnline || activeRide || incomingRequest) return;
+    const pollInterval = setInterval(checkActiveBroadcastOrder, 2500);
+    return () => clearInterval(pollInterval);
+  }, [checkActiveBroadcastOrder, isOnline, activeRide, incomingRequest]);
+
   // Socket Connection and Event Listeners
   useEffect(() => {
     if (!captain) return;
@@ -404,6 +447,40 @@ export const CaptainAuthProvider = ({ children }) => {
     }
   };
 
+  // Helper for quick testing: Dispatch a test ride within 300m of Captain's location
+  const dispatchTestRideNearMe = async () => {
+    if (!isOnline) {
+      addToast('Please tap GO ONLINE with GPS location first to receive orders.', 'error');
+      return;
+    }
+    addToast('🚀 Dispatching test booking within 300m of your GPS...', 'info');
+    try {
+      const pLat = currentLocation.lat + 0.002;
+      const pLng = currentLocation.lng + 0.002;
+      const dLat = currentLocation.lat + 0.035;
+      const dLng = currentLocation.lng + 0.035;
+      const res = await api.post('/rides', {
+        pickupLocation: {
+          address: 'Pickup Near You (300m GPS Distance)',
+          lat: pLat,
+          lng: pLng,
+        },
+        dropLocation: {
+          address: 'Metro Station / Landmark (Hyderabad)',
+          lat: dLat,
+          lng: dLng,
+        },
+        vehicleType: captain?.vehicleType || 'BIKE',
+        paymentMethod: 'UPI'
+      });
+      if (res.success) {
+        addToast('✅ Ride order placed! Incoming request ringing on your screen...', 'success');
+      }
+    } catch (err) {
+      addToast(err.message || 'Failed to dispatch test ride', 'error');
+    }
+  };
+
   // Switch active captain (for Scenario testing: Captain A, B, C, D, E)
   const switchCaptain = async (codeOrId) => {
     try {
@@ -526,6 +603,7 @@ export const CaptainAuthProvider = ({ children }) => {
         allCaptains,
         fetchAllCaptains,
         toggleOnline,
+        dispatchTestRideNearMe,
         switchCaptain,
         login,
         register,

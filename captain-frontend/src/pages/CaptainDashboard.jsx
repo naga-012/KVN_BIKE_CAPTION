@@ -27,6 +27,7 @@ export const CaptainDashboard = ({ onOpenScenarioTest }) => {
     currentLocation,
     captainStatus, 
     toggleOnline, 
+    dispatchTestRideNearMe,
     activeRide, 
     incomingRequest, 
     setIncomingRequest 
@@ -90,18 +91,30 @@ export const CaptainDashboard = ({ onOpenScenarioTest }) => {
                   </div>
                 </div>
 
-                {/* Go Online / Go Offline Primary Button */}
-                <button
-                  onClick={() => toggleOnline()}
-                  className={`px-6 py-3.5 rounded-2xl font-black text-xs md:text-sm tracking-wider uppercase transition-all shadow-lg flex items-center gap-2 shrink-0 ${
-                    isOnline
-                      ? 'bg-dark-700 hover:bg-dark-600 text-slate-300 border border-dark-600'
-                      : 'bg-gradient-to-r from-brand-500 to-brand-600 hover:from-brand-400 hover:to-brand-500 text-dark-900 shadow-glow-gold'
-                  }`}
-                >
-                  <Power className="w-4 h-4" />
-                  <span>{isOnline ? 'GO OFFLINE' : 'GO ONLINE'}</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  {isOnline && (
+                    <button
+                      onClick={dispatchTestRideNearMe}
+                      title="Dispatch a test ride 300 meters from your exact GPS location"
+                      className="px-4 py-3 rounded-2xl font-bold text-xs bg-indigo-600/90 hover:bg-indigo-500 text-white border border-indigo-400/40 shadow-lg flex items-center gap-1.5 transition-all shrink-0 active:scale-95"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-yellow-300 animate-pulse" />
+                      <span>Test Ride (&lt;2km)</span>
+                    </button>
+                  )}
+                  {/* Go Online / Go Offline Primary Button */}
+                  <button
+                    onClick={() => toggleOnline()}
+                    className={`px-6 py-3.5 rounded-2xl font-black text-xs md:text-sm tracking-wider uppercase transition-all shadow-lg flex items-center gap-2 shrink-0 ${
+                      isOnline
+                        ? 'bg-dark-700 hover:bg-dark-600 text-slate-300 border border-dark-600'
+                        : 'bg-gradient-to-r from-brand-500 to-brand-600 hover:from-brand-400 hover:to-brand-500 text-dark-900 shadow-glow-gold'
+                    }`}
+                  >
+                    <Power className="w-4 h-4" />
+                    <span>{isOnline ? 'GO OFFLINE' : 'GO ONLINE'}</span>
+                  </button>
+                </div>
               </div>
 
               {/* Quick Metrics Bar: Today's Earnings, Completed Trips, Hours */}

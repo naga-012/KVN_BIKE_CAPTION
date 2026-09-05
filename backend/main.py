@@ -829,14 +829,27 @@ def create_ride(req: CreateRideReq, background_tasks: BackgroundTasks):
     return {"success": True, "ride": ride_doc, "broadcastCount": len(captains_within_2km)}
 
 @app.get("/api/captains/active-order")
-def get_active_order_for_captains():
+def get_active_order_for_captains(
+    captainId: Optional[str] = Query(None),
+    lat: Optional[float] = Query(None),
+    lng: Optional[float] = Query(None)
+):
     """
     Returns the latest order broadcasting to captains within 2km radius.
-    If already accepted by any captain, status is DRIVER_ASSIGNED so it disappears right away.
+    If captain coordinates are provided, strictly verifies distance <= 2.0 km.
     """
     order = rides_col.find_one({"status": "SEARCHING_DRIVER"}, sort=[("createdAt", -1)])
     if not order:
         return {"success": True, "activeOrder": None, "captainsWithin2km": []}
+
+    if lat is not None and lng is not None:
+        p_lat = order.get("pickupLocation", {}).get("lat")
+        p_lng = order.get("pickupLocation", {}).get("lng")
+        if p_lat is not None and p_lng is not None:
+            dist = calculate_distance_km(p_lat, p_lng, lat, lng)
+            if dist > 2.0:
+                return {"success": True, "activeOrder": None, "distanceKm": round(dist, 2), "within2km": False}
+
     return {
         "success": True,
         "activeOrder": serialize_doc(order),
