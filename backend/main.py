@@ -768,7 +768,7 @@ def estimate_fare(req: EstimateReq):
     }
 
 @app.post("/api/rides")
-def create_ride(req: CreateRideReq, background_tasks: BackgroundTasks):
+async def create_ride(req: CreateRideReq):
     dist_km = calculate_distance_km(
         req.pickupLocation.lat, req.pickupLocation.lng,
         req.dropLocation.lat, req.dropLocation.lng
@@ -792,6 +792,36 @@ def create_ride(req: CreateRideReq, background_tasks: BackgroundTasks):
     otp = str(random.randint(1000, 9999))
 
     captains_within_2km = get_captains_within_2km(req.pickupLocation.lat, req.pickupLocation.lng, req.vehicleType)
+
+    # If no captain is strictly <= 2.0 km, include any online available captains so the customer booking always reaches online captains
+    if not captains_within_2km:
+        try:
+            live_captains = list(captains_col.find({"isOnline": True, "status": "AVAILABLE"}))
+            for c in live_captains:
+                c_vtype = (c.get("vehicleType") or "BIKE").upper()
+                if c_vtype != req.vehicleType.upper():
+                    continue
+                loc = c.get("location") or {}
+                c_lat = loc.get("lat", req.pickupLocation.lat)
+                c_lng = loc.get("lng", req.pickupLocation.lng)
+                c_dist = calculate_distance_km(req.pickupLocation.lat, req.pickupLocation.lng, c_lat, c_lng)
+                captains_within_2km.append({
+                    "id": str(c["_id"]),
+                    "code": c.get("code", f"cpt_{str(c['_id'])[-4:]}"),
+                    "name": c["name"],
+                    "phone": c["phone"],
+                    "avatar": c.get("avatar"),
+                    "vehicleType": c_vtype,
+                    "vehicle": c.get("vehicle", "Vehicle"),
+                    "plateNumber": c.get("plateNumber", ""),
+                    "rating": c.get("rating", 4.9),
+                    "lat": round(c_lat, 6),
+                    "lng": round(c_lng, 6),
+                    "distanceKm": round(c_dist, 2),
+                    "etaMinutes": max(1, math.ceil(c_dist * 2.5)),
+                })
+        except Exception as e:
+            print(f"[Dispatch] Error finding online captains: {e}")
 
     ride_doc = {
         "source": "KVN_BIKE_BOOKING",
@@ -828,32 +858,20 @@ def create_ride(req: CreateRideReq, background_tasks: BackgroundTasks):
     ride_doc["_id"] = ride_id
     ride_doc["id"] = ride_id
 
-    # Broadcast ride:new_request simultaneously to all eligible captains via Socket.IO
-    background_tasks.add_task(broadcast_new_ride, ride_doc, captains_within_2km)
+    # Broadcast ride:new_request simultaneously to all captains via Socket.IO
+    await broadcast_new_ride(ride_doc, captains_within_2km)
 
     return {"success": True, "ride": ride_doc, "broadcastCount": len(captains_within_2km)}
 
 @app.get("/api/captains/active-order")
-def get_active_order_for_captains(
-    captainId: Optional[str] = Query(None),
-    lat: Optional[float] = Query(None),
-    lng: Optional[float] = Query(None)
-):
+def get_active_order_for_captains():
     """
-    Returns the latest order broadcasting to captains within 2km radius.
-    If captain coordinates are provided, strictly verifies distance <= 2.0 km.
+    Returns the latest customer order in SEARCHING_DRIVER status.
+    Ensures online captains receive customer bookings immediately.
     """
     order = rides_col.find_one({"status": "SEARCHING_DRIVER"}, sort=[("createdAt", -1)])
     if not order:
         return {"success": True, "activeOrder": None, "captainsWithin2km": []}
-
-    if lat is not None and lng is not None:
-        p_lat = order.get("pickupLocation", {}).get("lat")
-        p_lng = order.get("pickupLocation", {}).get("lng")
-        if p_lat is not None and p_lng is not None:
-            dist = calculate_distance_km(p_lat, p_lng, lat, lng)
-            if dist > 2.0:
-                return {"success": True, "activeOrder": None, "distanceKm": round(dist, 2), "within2km": False}
 
     return {
         "success": True,

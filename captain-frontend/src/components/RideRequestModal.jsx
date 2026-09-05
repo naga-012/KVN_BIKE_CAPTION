@@ -93,7 +93,8 @@ export const RideRequestModal = ({ request, onClose }) => {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="animate-ping-slow inline-flex h-3 w-3 rounded-full bg-dark-900"></span>
-              <h3 className="font-extrabold text-base tracking-tight uppercase">New Customer Ride Request</h3>
+              <h3 className="font-extrabold text-base tracking-tight uppercase">KVN Bike Booking Request</h3>
+              <span className="ml-1 px-2 py-0.5 rounded text-[10px] font-black bg-dark-900 text-brand-400 tracking-wider">KVN</span>
             </div>
             <div className="bg-dark-900 text-brand-400 px-3 py-1 rounded-full font-mono font-black text-sm shadow-inner flex items-center gap-1">
               <Clock className="w-3.5 h-3.5" />

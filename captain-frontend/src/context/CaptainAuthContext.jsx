@@ -115,37 +115,48 @@ export const CaptainAuthProvider = ({ children }) => {
     return () => clearInterval(interval);
   }, [checkActiveRide]);
 
-  // Resilient fallback: Check active broadcasting orders within 2km if waiting
+  // Resilient fallback: Check active broadcasting orders from KVN Bike Booking
   const checkActiveBroadcastOrder = useCallback(async () => {
     if (!isOnline || activeRide || incomingRequest) return;
     try {
       const cptId = captain?.id || captain?._id || captain?.code || 'cpt_a';
-      const res = await api.get(`/captains/active-order?captainId=${cptId}&lat=${currentLocation.lat}&lng=${currentLocation.lng}`);
+      const res = await api.get(`/captains/active-order?captainId=${cptId}`);
       if (res.success && res.activeOrder && res.activeOrder.status === 'SEARCHING_DRIVER') {
         const order = res.activeOrder;
+        
+        // Strictly only accept bookings from KVN Bike Booking
+        if (order.source && order.source !== 'KVN_BIKE_BOOKING') {
+          return;
+        }
+
         const myVType = (captain?.vehicleType || 'BIKE').toUpperCase();
         const ordVType = (order.vehicleType || 'BIKE').toUpperCase();
         if (myVType !== ordVType) return;
 
+        const rId = order.id || order._id;
+        let dist = 2.0;
         if (order.pickupLocation?.lat && order.pickupLocation?.lng) {
-          const distKm = calculateDistanceKm(
+          dist = calculateDistanceKm(
             currentLocation.lat,
             currentLocation.lng,
             order.pickupLocation.lat,
             order.pickupLocation.lng
           );
-          if (distKm <= 2.0) {
-            console.log('[Poll] Active order within 2km detected:', order.id);
-            setIncomingRequest({
-              ...order,
-              rideId: order.id,
-              ride_id: order.id,
-              estimatedFare: order.fareBreakdown?.totalFare || 50,
-            });
-            addToast(`🔔 New Ride Request: ₹${order.fareBreakdown?.totalFare || 50} • ${distKm.toFixed(1)} km away`, 'warning');
-            playBeepSound();
-          }
         }
+
+        console.log('[Poll] Active KVN Bike Booking order detected for online captain:', rId);
+        setIncomingRequest({
+          ...order,
+          rideId: rId,
+          ride_id: rId,
+          source: 'KVN_BIKE_BOOKING',
+          customerName: order.customerName || 'KVN Customer',
+          customerPhone: order.customerPhone || '',
+          estimatedFare: order.fareBreakdown?.totalFare || 50,
+          distanceKm: order.distanceKm || (dist < 999 ? Number(dist.toFixed(1)) : 2.0),
+        });
+        addToast(`🔔 New KVN Ride Request: ₹${order.fareBreakdown?.totalFare || 50} • ${order.pickupLocation?.address || 'Pickup'}`, 'warning');
+        playBeepSound();
       }
     } catch (err) {
       // non-blocking
@@ -172,45 +183,46 @@ export const CaptainAuthProvider = ({ children }) => {
       });
     }
 
-    // Handle new incoming ride request
+    // Handle new incoming ride request from KVN Bike Booking
     const handleNewRequest = (data) => {
       console.log('[Socket] Incoming ride request:', data);
 
-      // Check if captain is eligible (online, available, vehicle type match)
+      // Check if captain is eligible (online, available)
       if (!isOnline) return;
       if (captainStatus === 'BUSY') return;
+
+      // Only give rides to the captain who are booking from KVN Bike Booking!
+      if (data.source && data.source !== 'KVN_BIKE_BOOKING') {
+        console.log(`[Socket] Rejecting ride from non-KVN source: ${data.source}`);
+        return;
+      }
 
       const myVehicleType = (captain.vehicleType || 'BIKE').toUpperCase();
       const reqVehicleType = (data.vehicleType || 'BIKE').toUpperCase();
       if (myVehicleType !== reqVehicleType) return;
 
-      // Strictly check distance from captain's exact location to pickup (2.0 km radius)
+      let distKm = 2.0;
       if (data.pickupLocation && data.pickupLocation.lat && data.pickupLocation.lng) {
-        const distKm = calculateDistanceKm(
+        distKm = calculateDistanceKm(
           currentLocation.lat,
           currentLocation.lng,
           data.pickupLocation.lat,
           data.pickupLocation.lng
         );
-        if (distKm > 2.0) {
-          console.log(`[Socket] Ride pickup is ${distKm.toFixed(2)} km away (> 2.0 km radius). Order rejected for captain ${cptId}.`);
-          return;
-        }
       }
 
-      // If specific eligible list provided, check membership
-      if (data.eligibleCaptainIds && data.eligibleCaptainIds.length > 0) {
-        const isEligible = data.eligibleCaptainIds.includes(String(cptId)) ||
-                           data.eligibleCaptainIds.includes(String(captain.code)) ||
-                           data.eligibleCaptainIds.includes(String(captain._id));
-        if (!isEligible) {
-          console.log(`[Socket] Captain ${cptId} is beyond 2KM dispatch radius, ignoring.`);
-          return;
-        }
-      }
-
-      setIncomingRequest(data);
-      addToast(`🔔 New Ride Request: ₹${data.estimatedFare || 50} • ${data.distanceKm || 2} km`, 'warning');
+      const rId = data.rideId || data.ride_id || data.id || data._id;
+      setIncomingRequest({
+        ...data,
+        rideId: rId,
+        ride_id: rId,
+        source: 'KVN_BIKE_BOOKING',
+        customerName: data.customerName || 'KVN Customer',
+        customerPhone: data.customerPhone || '',
+        distanceKm: data.distanceKm || (distKm < 999 ? Number(distKm.toFixed(1)) : 2.0),
+        estimatedFare: data.estimatedFare || data.fareBreakdown?.totalFare || 50,
+      });
+      addToast(`🔔 New KVN Ride Request: ₹${data.estimatedFare || data.fareBreakdown?.totalFare || 50} • ${data.pickupLocation?.address || 'Pickup'}`, 'warning');
       playBeepSound();
     };
 

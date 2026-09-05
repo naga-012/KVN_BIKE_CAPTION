@@ -124,6 +124,29 @@ export const CustomerApp = () => {
     }
   };
 
+  // Auto-detect customer GPS location on mount if available
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const lat = pos.coords.latitude;
+          const lng = pos.coords.longitude;
+          console.log('[CustomerApp] Auto-detected customer GPS location:', lat, lng);
+          setPickup((prev) => ({
+            ...prev,
+            lat,
+            lng,
+            address: prev.address === 'BN Reddy Nagar Bus Stop, Hyderabad, Telangana' ? 'Current Location' : prev.address
+          }));
+        },
+        (err) => {
+          console.log('[CustomerApp] Geolocation fallback to default:', err.message);
+        },
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }
+      );
+    }
+  }, []);
+
   useEffect(() => {
     fetchEstimates();
   }, [pickup, drop]);
@@ -192,6 +215,7 @@ export const CustomerApp = () => {
     setBookingLoading(true);
     try {
       const res = await api.post('/rides', {
+        source: 'KVN_BIKE_BOOKING',
         pickupLocation: pickup,
         dropLocation: drop,
         vehicleType,

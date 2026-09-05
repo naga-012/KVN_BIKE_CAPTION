@@ -237,18 +237,15 @@ async def broadcast_new_ride(ride_doc: dict, eligible_captains: list):
         "expiresInSeconds": 15
     }
 
-    print(f"[Socket.IO] Broadcasting ride {ride_id} simultaneously to {len(eligible_captains)} captains within 2 KM")
+    print(f"[Socket.IO] Real KVN Customer Ride {ride_id} broadcasting to room 'captains' and {len(eligible_captains)} captains")
     
-    # Broadcast to each eligible captain's room
+    # Broadcast to general 'captains' room so ANY online captain receives the real booking
+    await sio.emit("ride:new_request", payload, room="captains")
+
+    # Also broadcast to individual captain rooms
     for cpt in eligible_captains:
         cpt_id = str(cpt.get("id") or cpt.get("_id") or cpt.get("code"))
         await sio.emit("ride:new_request", payload, room=f"captain_{cpt_id}")
-
-    # Also broadcast to general 'captains' room with eligibleCaptains list for instant matching
-    await sio.emit("ride:new_request", {
-        **payload,
-        "eligibleCaptainIds": [str(c.get("id") or c.get("_id") or c.get("code")) for c in eligible_captains]
-    }, room="captains")
 
 async def broadcast_ride_accepted(ride_doc: dict, captain_info: dict):
     """
