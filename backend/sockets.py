@@ -220,8 +220,10 @@ async def broadcast_new_ride(ride_doc: dict, eligible_captains: list):
     payload = {
         "rideId": ride_id,
         "ride_id": ride_id,
+        "source": ride_doc.get("source", "KVN_BIKE_BOOKING"),
         "vehicleType": ride_doc.get("vehicleType", "BIKE"),
-        "customerName": "Rahul Sharma",
+        "customerName": ride_doc.get("customerName", "KVN Customer"),
+        "customerPhone": ride_doc.get("customerPhone", ""),
         "customerRating": 4.86,
         "pickupLocation": ride_doc.get("pickupLocation"),
         "dropLocation": ride_doc.get("dropLocation"),

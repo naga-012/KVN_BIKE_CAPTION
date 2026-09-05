@@ -197,6 +197,8 @@ export const CustomerApp = () => {
         vehicleType,
         couponCode: couponCode || undefined,
         paymentMethod,
+        customerName: user?.name || user?.email || 'KVN Customer',
+        customerPhone: user?.phone || '',
       });
 
       setActiveRide(res.ride);

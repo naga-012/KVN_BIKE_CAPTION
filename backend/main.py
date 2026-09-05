@@ -151,6 +151,8 @@ class CreateRideReq(BaseModel):
     vehicleType: str
     couponCode: Optional[str] = None
     paymentMethod: str = "UPI"
+    customerName: Optional[str] = "KVN Customer"
+    customerPhone: Optional[str] = ""
 
 class TopupReq(BaseModel):
     amount: float
@@ -792,6 +794,9 @@ def create_ride(req: CreateRideReq, background_tasks: BackgroundTasks):
     captains_within_2km = get_captains_within_2km(req.pickupLocation.lat, req.pickupLocation.lng, req.vehicleType)
 
     ride_doc = {
+        "source": "KVN_BIKE_BOOKING",
+        "customerName": req.customerName or "KVN Customer",
+        "customerPhone": req.customerPhone or "",
         "vehicleType": req.vehicleType,
         "pickupLocation": req.pickupLocation.dict(),
         "dropLocation": req.dropLocation.dict(),

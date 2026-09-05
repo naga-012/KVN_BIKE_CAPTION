@@ -447,40 +447,6 @@ export const CaptainAuthProvider = ({ children }) => {
     }
   };
 
-  // Helper for quick testing: Dispatch a test ride within 300m of Captain's location
-  const dispatchTestRideNearMe = async () => {
-    if (!isOnline) {
-      addToast('Please tap GO ONLINE with GPS location first to receive orders.', 'error');
-      return;
-    }
-    addToast('🚀 Dispatching test booking within 300m of your GPS...', 'info');
-    try {
-      const pLat = currentLocation.lat + 0.002;
-      const pLng = currentLocation.lng + 0.002;
-      const dLat = currentLocation.lat + 0.035;
-      const dLng = currentLocation.lng + 0.035;
-      const res = await api.post('/rides', {
-        pickupLocation: {
-          address: 'Pickup Near You (300m GPS Distance)',
-          lat: pLat,
-          lng: pLng,
-        },
-        dropLocation: {
-          address: 'Metro Station / Landmark (Hyderabad)',
-          lat: dLat,
-          lng: dLng,
-        },
-        vehicleType: captain?.vehicleType || 'BIKE',
-        paymentMethod: 'UPI'
-      });
-      if (res.success) {
-        addToast('✅ Ride order placed! Incoming request ringing on your screen...', 'success');
-      }
-    } catch (err) {
-      addToast(err.message || 'Failed to dispatch test ride', 'error');
-    }
-  };
-
   // Switch active captain (for Scenario testing: Captain A, B, C, D, E)
   const switchCaptain = async (codeOrId) => {
     try {
@@ -603,7 +569,6 @@ export const CaptainAuthProvider = ({ children }) => {
         allCaptains,
         fetchAllCaptains,
         toggleOnline,
-        dispatchTestRideNearMe,
         switchCaptain,
         login,
         register,
