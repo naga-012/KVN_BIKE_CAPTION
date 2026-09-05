@@ -60,14 +60,23 @@ const createDropMarkerIcon = () => {
   });
 };
 
-// Helper component to smoothly center/re-center map and invalidate size
-function MapUpdater({ center, zoom }) {
+// Helper component to smoothly fit bounds and invalidate size for Captain and Customer
+function MapUpdater({ captainPos, pickupPos, dropPos, activeRide }) {
   const map = useMap();
+
   useEffect(() => {
-    if (center && center[0] && center[1]) {
-      map.flyTo(center, zoom || 15, { duration: 1.2 });
+    const points = [];
+    if (captainPos && captainPos[0] && captainPos[1]) points.push(captainPos);
+    if (pickupPos && pickupPos[0] && pickupPos[1]) points.push(pickupPos);
+    if (activeRide?.status === 'RIDE_STARTED' && dropPos && dropPos[0] && dropPos[1]) points.push(dropPos);
+
+    if (points.length >= 2) {
+      const bounds = L.latLngBounds(points);
+      map.fitBounds(bounds, { padding: [60, 60], maxZoom: 16 });
+    } else if (points.length === 1) {
+      map.flyTo(points[0], 15, { duration: 1.2 });
     }
-  }, [center, zoom, map]);
+  }, [captainPos, pickupPos, dropPos, activeRide, map]);
 
   useEffect(() => {
     const t1 = setTimeout(() => map.invalidateSize(), 150);
@@ -122,7 +131,7 @@ export const CaptainMap = ({ activeRide, incomingRequest }) => {
           maxZoom={20}
         />
 
-        <MapUpdater center={mapCenter} zoom={activeRide ? 15 : 14} />
+        <MapUpdater captainPos={captainPos} pickupPos={pickupPos} dropPos={dropPos} activeRide={activeRide} />
 
         {/* Captain Location Marker */}
         <Marker
@@ -140,12 +149,12 @@ export const CaptainMap = ({ activeRide, incomingRequest }) => {
           </Popup>
         </Marker>
 
-        {/* Pickup Marker */}
+        {/* Customer Pickup Marker */}
         {pickupPos && (
           <Marker position={pickupPos} icon={createPickupMarkerIcon()}>
             <Popup>
               <div className="p-1 text-xs">
-                <p className="font-bold text-emerald-700">Customer Pickup</p>
+                <p className="font-bold text-emerald-700">Customer Location</p>
                 <p className="text-slate-600">{pickupLoc.address || 'Pickup Point'}</p>
               </div>
             </Popup>
@@ -175,6 +184,27 @@ export const CaptainMap = ({ activeRide, incomingRequest }) => {
           />
         )}
       </MapContainer>
+
+      {/* Direct Google Maps Customer Location Navigation Button */}
+      {pickupPos && (
+        <a
+          href={
+            activeRide?.status === 'RIDE_STARTED' && dropPos
+              ? `https://www.google.com/maps/dir/?api=1&destination=${dropPos[0]},${dropPos[1]}`
+              : `https://www.google.com/maps/dir/?api=1&destination=${pickupPos[0]},${pickupPos[1]}`
+          }
+          target="_blank"
+          rel="noopener noreferrer"
+          className="absolute bottom-4 right-4 z-[1000] bg-blue-600 hover:bg-blue-500 text-white font-black text-xs px-3.5 py-2 rounded-xl shadow-2xl flex items-center gap-2 border border-blue-400/50 backdrop-blur-md transition-all active:scale-95"
+        >
+          <Navigation2 className="w-4 h-4 fill-white" />
+          <span>
+            {activeRide?.status === 'RIDE_STARTED'
+              ? 'Navigate to Drop Location (Google Maps) ↗'
+              : 'Navigate to Customer Location (Google Maps) ↗'}
+          </span>
+        </a>
+      )}
 
       {/* Floating Status & Map Info Pill */}
       <div className="absolute top-3 left-3 z-[1000] bg-dark-900/85 backdrop-blur-md px-3 py-1.5 rounded-xl border border-dark-600 shadow-lg flex items-center gap-2">
