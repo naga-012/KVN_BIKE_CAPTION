@@ -15,6 +15,10 @@ ratings_col = db["ratings"]
 support_col = db["support_tickets"]
 fare_settings_col = db["fare_settings"]
 drivers_col = db["drivers"]
+captains_col = db["captains"]
+captain_earnings_col = db["captain_earnings"]
+ride_messages_col = db["ride_messages"]
+sos_alerts_col = db["sos_alerts"]
 
 def init_db():
     # Seed default fare settings if missing
@@ -113,3 +117,171 @@ def init_db():
             "promotionalBalance": 50
         })
         print("[Database] Initialized wallet for Rahul Sharma")
+
+    # Seed 5 Standard Captains for the Required Test Scenario (A, B, C, D within 2km; E at 2.5km)
+    base_lat, base_lng = 17.3228, 78.5630  # BN Reddy Nagar, Hyderabad
+    default_captains = [
+        {
+            "code": "cpt_a",
+            "name": "Captain A - Ramesh Yadav",
+            "phone": "9848011221",
+            "email": "captain.a@kvn.com",
+            "password": "Password@123",
+            "avatar": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&q=80",
+            "rating": 4.92,
+            "totalRides": 482,
+            "vehicleType": "BIKE",
+            "vehicle": "Honda Activa 6G (Black)",
+            "plateNumber": "TS 08 EA 4589",
+            "vehicleModel": "Honda Activa 6G",
+            "vehicleColor": "Midnight Black",
+            "status": "AVAILABLE",
+            "isOnline": True,
+            "verificationStatus": "APPROVED",
+            "location": {
+                "lat": round(base_lat + 0.0032, 6),
+                "lng": round(base_lng + 0.0028, 6),
+                "updatedAt": "2026-09-05T06:00:00Z",
+                "label": "0.5 KM from Hub"
+            },
+            "todayEarnings": 850,
+            "weeklyEarnings": 5420,
+            "monthlyEarnings": 21800,
+            "onlineHoursToday": 5.4,
+            "walletBalance": 1240
+        },
+        {
+            "code": "cpt_b",
+            "name": "Captain B - Shiva Kumar",
+            "phone": "9848011222",
+            "email": "captain.b@kvn.com",
+            "password": "Password@123",
+            "avatar": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=150&q=80",
+            "rating": 4.87,
+            "totalRides": 395,
+            "vehicleType": "BIKE",
+            "vehicle": "TVS Jupiter 125 (Titanium Grey)",
+            "plateNumber": "TS 07 UA 7821",
+            "vehicleModel": "TVS Jupiter 125",
+            "vehicleColor": "Titanium Grey",
+            "status": "AVAILABLE",
+            "isOnline": True,
+            "verificationStatus": "APPROVED",
+            "location": {
+                "lat": round(base_lat - 0.0052, 6),
+                "lng": round(base_lng + 0.0048, 6),
+                "updatedAt": "2026-09-05T06:00:00Z",
+                "label": "0.8 KM from Hub"
+            },
+            "todayEarnings": 720,
+            "weeklyEarnings": 4890,
+            "monthlyEarnings": 19400,
+            "onlineHoursToday": 4.8,
+            "walletBalance": 980
+        },
+        {
+            "code": "cpt_c",
+            "name": "Captain C - Venkat Reddy",
+            "phone": "9848011223",
+            "email": "captain.c@kvn.com",
+            "password": "Password@123",
+            "avatar": "https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?auto=format&fit=crop&w=150&q=80",
+            "rating": 4.96,
+            "totalRides": 612,
+            "vehicleType": "BIKE",
+            "vehicle": "Hero Splendor Plus (Blue)",
+            "plateNumber": "TS 09 FB 3412",
+            "vehicleModel": "Hero Splendor Plus",
+            "vehicleColor": "Techno Blue",
+            "status": "AVAILABLE",
+            "isOnline": True,
+            "verificationStatus": "APPROVED",
+            "location": {
+                "lat": round(base_lat + 0.0080, 6),
+                "lng": round(base_lng - 0.0068, 6),
+                "updatedAt": "2026-09-05T06:00:00Z",
+                "label": "1.2 KM from Hub"
+            },
+            "todayEarnings": 1100,
+            "weeklyEarnings": 6750,
+            "monthlyEarnings": 27300,
+            "onlineHoursToday": 6.2,
+            "walletBalance": 1850
+        },
+        {
+            "code": "cpt_d",
+            "name": "Captain D - MD Rizwan",
+            "phone": "9848011224",
+            "email": "captain.d@kvn.com",
+            "password": "Password@123",
+            "avatar": "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=150&q=80",
+            "rating": 4.89,
+            "totalRides": 284,
+            "vehicleType": "BIKE",
+            "vehicle": "Bajaj Pulsar 150 (Red)",
+            "plateNumber": "TS 08 HK 9923",
+            "vehicleModel": "Bajaj Pulsar 150",
+            "vehicleColor": "Laser Black/Red",
+            "status": "AVAILABLE",
+            "isOnline": True,
+            "verificationStatus": "APPROVED",
+            "location": {
+                "lat": round(base_lat - 0.0112, 6),
+                "lng": round(base_lng + 0.0105, 6),
+                "updatedAt": "2026-09-05T06:00:00Z",
+                "label": "1.7 KM from Hub"
+            },
+            "todayEarnings": 540,
+            "weeklyEarnings": 3950,
+            "monthlyEarnings": 16200,
+            "onlineHoursToday": 3.9,
+            "walletBalance": 640
+        },
+        {
+            "code": "cpt_e",
+            "name": "Captain E - K. Srinivas",
+            "phone": "9848011225",
+            "email": "captain.e@kvn.com",
+            "password": "Password@123",
+            "avatar": "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&w=150&q=80",
+            "rating": 4.84,
+            "totalRides": 195,
+            "vehicleType": "BIKE",
+            "vehicle": "Suzuki Access 125 (Silver)",
+            "plateNumber": "TS 07 ZA 6610",
+            "vehicleModel": "Suzuki Access 125",
+            "vehicleColor": "Metallic Matte Platinum Silver",
+            "status": "AVAILABLE",
+            "isOnline": True,
+            "verificationStatus": "APPROVED",
+            "location": {
+                "lat": round(base_lat + 0.0175, 6),
+                "lng": round(base_lng + 0.0155, 6),
+                "updatedAt": "2026-09-05T06:00:00Z",
+                "label": "2.5 KM from Hub (OUTSIDE 2KM RADIUS)"
+            },
+            "todayEarnings": 420,
+            "weeklyEarnings": 2980,
+            "monthlyEarnings": 12100,
+            "onlineHoursToday": 2.8,
+            "walletBalance": 490
+        }
+    ]
+
+    for cpt in default_captains:
+        existing = captains_col.find_one({"phone": cpt["phone"]})
+        if not existing:
+            captains_col.insert_one(cpt)
+        else:
+            # Update base details and coordinates if needed
+            captains_col.update_one(
+                {"phone": cpt["phone"]},
+                {"$set": {
+                    "location": cpt["location"],
+                    "isOnline": True,
+                    "status": "AVAILABLE",
+                    "verificationStatus": "APPROVED"
+                }}
+            )
+    print(f"[Database] Seeded/verified {len(default_captains)} captains (Captains A-E)")
+

@@ -18,10 +18,22 @@ from database import (
     coupons_col,
     ratings_col,
     support_col,
-    fare_settings_col
+    fare_settings_col,
+    captains_col,
+    captain_earnings_col,
+    ride_messages_col,
+    sos_alerts_col
 )
+import socketio
+from sockets import (
+    sio,
+    broadcast_new_ride,
+    broadcast_ride_accepted,
+    broadcast_ride_status_change
+)
+from captain_routes import captain_router
 
-app = FastAPI(title="KVN Ride Booking Platform Customer API", version="2.0.0")
+app = FastAPI(title="KVN Ride Booking Platform Customer & Captain API", version="2.0.0")
 
 # Enable CORS for frontend
 app.add_middleware(
@@ -31,6 +43,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include Captain Routes
+app.include_router(captain_router)
+
+# Mount Socket.IO on ASGI
+socket_app = socketio.ASGIApp(sio, other_asgi_app=app)
 
 @app.on_event("startup")
 def startup_event():
@@ -206,27 +224,71 @@ AVAILABLE_CAPTAINS_POOL = [
 ]
 
 def get_captains_within_2km(pickup_lat: float, pickup_lng: float, vehicle_type: str = "BIKE"):
-    """Finds all active captains positioned within exactly 2.0 km radius of customer pickup"""
+    """
+    Finds all active captains positioned within exactly 2.0 km radius of customer pickup.
+    Checks live database 'captains' collection first; falls back to Telangana pool if needed.
+    """
     results = []
-    for c in AVAILABLE_CAPTAINS_POOL:
-        cap_lat = pickup_lat + c["offsetLat"]
-        cap_lng = pickup_lng + c["offsetLng"]
-        dist = calculate_distance_km(pickup_lat, pickup_lng, cap_lat, cap_lng)
-        if dist <= 2.0:
-            results.append({
-                "id": c["id"],
-                "name": c["name"],
-                "phone": c["phone"],
-                "avatar": c["avatar"],
-                "vehicleType": c["vehicleType"],
-                "vehicle": c["vehicle"],
-                "plateNumber": c["plateNumber"],
-                "rating": c["rating"],
-                "lat": round(cap_lat, 6),
-                "lng": round(cap_lng, 6),
-                "distanceKm": round(dist, 2),
-                "etaMinutes": max(1, math.ceil(dist * 2.5)),
-            })
+    
+    # 1. Query live database captains
+    try:
+        query = {
+            "isOnline": True,
+            "status": "AVAILABLE",
+            "verificationStatus": "APPROVED"
+        }
+        live_captains = list(captains_col.find(query))
+        for c in live_captains:
+            c_vtype = (c.get("vehicleType") or "BIKE").upper()
+            if c_vtype != vehicle_type.upper():
+                continue
+            loc = c.get("location") or {}
+            c_lat = loc.get("lat")
+            c_lng = loc.get("lng")
+            if c_lat is None or c_lng is None:
+                continue
+            dist = calculate_distance_km(pickup_lat, pickup_lng, c_lat, c_lng)
+            if dist <= 2.0:
+                results.append({
+                    "id": str(c["_id"]),
+                    "code": c.get("code", f"cpt_{str(c['_id'])[-4:]}"),
+                    "name": c["name"],
+                    "phone": c["phone"],
+                    "avatar": c.get("avatar"),
+                    "vehicleType": c_vtype,
+                    "vehicle": c.get("vehicle", "Vehicle"),
+                    "plateNumber": c.get("plateNumber", ""),
+                    "rating": c.get("rating", 4.9),
+                    "lat": round(c_lat, 6),
+                    "lng": round(c_lng, 6),
+                    "distanceKm": round(dist, 2),
+                    "etaMinutes": max(1, math.ceil(dist * 2.5)),
+                })
+    except Exception as e:
+        print(f"[Dispatch] Error querying live captains: {e}")
+
+    # 2. If no live captains found in DB, fallback to seed pool
+    if not results:
+        for c in AVAILABLE_CAPTAINS_POOL:
+            cap_lat = pickup_lat + c["offsetLat"]
+            cap_lng = pickup_lng + c["offsetLng"]
+            dist = calculate_distance_km(pickup_lat, pickup_lng, cap_lat, cap_lng)
+            if dist <= 2.0:
+                results.append({
+                    "id": c["id"],
+                    "code": c["id"],
+                    "name": c["name"],
+                    "phone": c["phone"],
+                    "avatar": c["avatar"],
+                    "vehicleType": c["vehicleType"],
+                    "vehicle": c["vehicle"],
+                    "plateNumber": c["plateNumber"],
+                    "rating": c["rating"],
+                    "lat": round(cap_lat, 6),
+                    "lng": round(cap_lng, 6),
+                    "distanceKm": round(dist, 2),
+                    "etaMinutes": max(1, math.ceil(dist * 2.5)),
+                })
     results.sort(key=lambda x: x["distanceKm"])
     return results
 
@@ -759,8 +821,8 @@ def create_ride(req: CreateRideReq, background_tasks: BackgroundTasks):
     ride_doc["_id"] = ride_id
     ride_doc["id"] = ride_id
 
-    # Trigger realistic fallback dispatch if not accepted manually within 6s
-    background_tasks.add_task(simulate_driver_dispatch, ride_id)
+    # Broadcast ride:new_request simultaneously to all eligible captains via Socket.IO
+    background_tasks.add_task(broadcast_new_ride, ride_doc, captains_within_2km)
 
     return {"success": True, "ride": ride_doc, "broadcastCount": len(captains_within_2km)}
 
@@ -780,16 +842,17 @@ def get_active_order_for_captains():
     }
 
 @app.post("/api/rides/{ride_id}/accept")
-def accept_ride_by_captain(ride_id: str, req: AcceptRideReq):
+def accept_ride_by_captain(ride_id: str, req: AcceptRideReq, background_tasks: BackgroundTasks):
     """
     Atomic first-come, first-served lock:
     The first captain who accepts gets the order automatically.
-    The order disappears from other captains' apps right away.
+    The order disappears from other captains' apps right away via Socket.IO.
     """
     from pymongo import ReturnDocument
 
     captain_info = {
         "id": req.captainId,
+        "code": req.captainId,
         "name": req.captainName or "Captain Ramesh Yadav",
         "phone": req.phone or "+91 98480 11223",
         "avatar": req.avatar or "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&q=80",
@@ -798,16 +861,27 @@ def accept_ride_by_captain(ride_id: str, req: AcceptRideReq):
         "rating": 4.92
     }
 
+    # Fetch captain location if in DB
+    captain_loc = {"lat": 17.3228 + 0.003, "lng": 78.5630 + 0.003}
+    try:
+        c_db = captains_col.find_one({"$or": [{"_id": ObjectId(req.captainId)} if ObjectId.is_valid(req.captainId) else {"phone": req.captainId}, {"code": req.captainId}]})
+        if c_db and c_db.get("location"):
+            captain_loc = c_db["location"]
+    except Exception:
+        pass
+
     # Atomic lock: updates ONLY IF status is still SEARCHING_DRIVER
     try:
         updated_ride = rides_col.find_one_and_update(
             {"_id": ObjectId(ride_id), "status": "SEARCHING_DRIVER"},
             {"$set": {
                 "status": "DRIVER_ASSIGNED",
+                "captainId": req.captainId,
+                "captain_id": req.captainId,
                 "driver": captain_info,
                 "driverLiveLocation": {
-                    "lat": 17.3228 + 0.003,
-                    "lng": 78.5630 + 0.003
+                    "lat": captain_loc.get("lat", 17.3228 + 0.003),
+                    "lng": captain_loc.get("lng", 78.5630 + 0.003)
                 },
                 "acceptedAt": datetime.utcnow()
             }},
@@ -822,6 +896,16 @@ def accept_ride_by_captain(ride_id: str, req: AcceptRideReq):
             status_code=409,
             detail="Order already accepted by another captain. It has disappeared from your queue."
         )
+
+    # Update winning captain status to BUSY
+    try:
+        query = {"_id": ObjectId(req.captainId)} if ObjectId.is_valid(req.captainId) else {"$or": [{"phone": req.captainId}, {"code": req.captainId}]}
+        captains_col.update_one(query, {"$set": {"status": "BUSY"}})
+    except Exception as e:
+        print(f"[Accept] Error setting captain status to BUSY: {e}")
+
+    # Real-time socket broadcast: winner confirmed, other captains cancelled, customer notified
+    background_tasks.add_task(broadcast_ride_accepted, serialize_doc(updated_ride), captain_info)
 
     return {
         "success": True,
@@ -973,4 +1057,4 @@ def get_my_tickets():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=5000, reload=True)
+    uvicorn.run("main:socket_app", host="0.0.0.0", port=5000, reload=True)

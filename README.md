@@ -1,71 +1,117 @@
-# 🚀 KVN — Customer Ride-Booking Platform (Python FastAPI + React)
+# 🚀 KVN — Ride-Booking Ecosystem (Customer + Captain + FastAPI + MongoDB)
 
-**KVN** is a modern, full-stack customer ride-booking application built specifically for Indian riders (supporting **Bike**, **Auto**, and **Cab**).
+**KVN** ("Ride. Earn. Move with KVN") is a production-grade ride-hailing ecosystem built for Indian riders and driver partners (supporting **Bike**, **Auto**, and **Cab**).
 
-The architecture consists of a high-performance **Python FastAPI** backend connected to **MongoDB** and a **React + Vite + Tailwind CSS** customer frontend.
+The ecosystem connects customer ride requests directly with nearby driver partners in real time via **Python FastAPI**, **Socket.io**, and **MongoDB**.
 
 ---
 
-## 🏗 Architecture & Stack
+## 🏗 Platform Architecture
 
 ```
-KVN/
+KVN_BIKE_CAPTION/
 ├── backend/
-│   ├── main.py              # Python FastAPI server with all customer endpoints
-│   ├── database.py          # PyMongo MongoDB client & automatic data seeding
-│   ├── requirements.txt     # Python dependencies (fastapi, uvicorn, pymongo, pydantic)
-│   └── .env                 # Environment configuration
-├── frontend/
+│   ├── main.py              # Python FastAPI server with Customer & Captain endpoints + ASGI Socket.io
+│   ├── database.py          # PyMongo MongoDB client & automatic seeding (Captains A-E, users, fares)
+│   ├── sockets.py           # Socket.io real-time engine & 2KM simultaneous broadcast handlers
+│   ├── captain_routes.py    # Captain REST APIs (auth, arrived, verify-otp, start, complete, test suite)
+│   └── requirements.txt     # Python dependencies
+├── frontend/                # Customer Ride-Booking Web Application (Port 5173)
 │   ├── src/
-│   │   ├── components/      # MapView (Leaflet), Header, Modals (Chat, Safety, Payment, Rating, Invoice)
-│   │   ├── context/         # AuthContext, ToastContext
+│   │   ├── pages/CustomerApp.jsx
+│   │   ├── components/
+│   │   └── services/
+│   └── package.json
+├── captain-frontend/        # Captain / Driver Partner Web Application (Port 5174)
+│   ├── src/
+│   │   ├── components/
+│   │   │   ├── CaptainNavbar.jsx      # Online/Offline switch, SOS, Captain switcher
+│   │   │   ├── CaptainMap.jsx         # Leaflet + custom KVN vehicle and route markers
+│   │   │   ├── RideRequestModal.jsx   # 15s visual countdown request card with Accept/Reject
+│   │   │   ├── ActiveRideSheet.jsx    # Arrived -> OTP verify -> Start -> Complete ride
+│   │   │   ├── OtpVerificationModal.jsx # 4-digit Ride OTP keypad
+│   │   │   ├── CaptainChatModal.jsx   # Real-time chat with rider
+│   │   │   ├── SafetyCenterModal.jsx  # SOS Emergency (112 police dispatch)
+│   │   │   └── ScenarioTestModal.jsx  # Interactive 2KM radius & race condition test runner
 │   │   ├── pages/
-│   │   │   └── CustomerApp.jsx  # Complete Customer Booking & Ride Lifecycle experience
-│   │   ├── services/        # Axios API client & Socket.io client
-│   │   ├── App.jsx          # Customer application entry shell
-│   │   ├── index.css        # Tailwind & glassmorphism theme
-│   │   └── main.jsx
-│   ├── index.html
-│   ├── vite.config.js
-│   └── tailwind.config.js
+│   │   │   ├── CaptainDashboard.jsx   # Main map & bottom sheet experience
+│   │   │   ├── EarningsPage.jsx       # Daily, weekly, monthly earnings breakdown
+│   │   │   ├── RideHistoryPage.jsx    # Past completed rides and receipts
+│   │   │   ├── CaptainProfilePage.jsx # Vehicle info, plate, verified badge, documents
+│   │   │   └── CaptainAuthPage.jsx    # Login and 6-step registration onboarding wizard
+│   │   └── context/CaptainAuthContext.jsx
+│   └── package.json
+├── test_e2e.py              # Automated End-to-End Test Suite (Scenarios 45 & 46)
 └── README.md
 ```
 
 ---
 
-## 🌟 Customer Features Included
+## ⚡ Core Dispatch Logic & Guarantees
 
-1. **Interactive Map**: OpenStreetMap + Leaflet with custom SVG markers and live animated route lines.
-2. **Dynamic Fare Engine**: Server-calculated fares in Python for **Bike**, **Auto**, and **Cab** with haversine distance & duration.
-3. **Discount Coupons**: Promo code application (`KVN50`, `FIRST20`, `BIKE10`).
-4. **Radar Dispatch**: Live searching animation connecting to nearby drivers.
-5. **Driver Assigned & Arrived**: Live driver coordinates, vehicle plate number, driver rating, and **4-digit Ride OTP**.
-6. **Trip Progression Simulation**: Instant simulation controls to test driver arrival, ride start, and trip completion.
-7. **In-Ride Live Chat**: Live messaging modal between customer and driver partner.
-8. **Safety & SOS Center**: 1-click emergency SOS alert, police 112 hotline, and live trip link sharing.
-9. **Itemized Receipt & Invoice**: Complete fare breakdown (base fare, distance charge, time charge, taxes, discount) with print/download.
-10. **Multi-Modal Payments**: UPI (GPay/PhonePe/Paytm), KVN Wallet, Cards, and Cash.
-11. **5-Star Rating & Reviews**: Post-trip ratings with feedback chips.
-12. **KVN Wallet**: Balance management, top-up funds, and promotional balance ledger.
-13. **Trip History & Invoices**: Overview of all past completed trips with receipts.
-14. **Customer Support**: Ticket submission and resolution tracker.
+### 1. 2 KM Radius Simultaneous Broadcast
+- When a customer confirms a booking, the backend queries all captains who are **ONLINE**, **AVAILABLE**, **APPROVED**, and match the requested **vehicleType**.
+- Calculates Haversine distance between customer pickup coordinates and captain GPS coordinates.
+- Sends the request **to all eligible captains within 2.0 km simultaneously** via Socket.io (`ride:new_request`).
+- Captains beyond 2.0 km (e.g. Captain E at 2.5 km) are strictly excluded.
+
+### 2. First Accept Wins (Atomic Lock)
+- Booking assignment uses an atomic conditional MongoDB update:
+  `find_one_and_update({"_id": ObjectId(ride_id), "status": "SEARCHING_DRIVER"}, {"$set": {"status": "DRIVER_ASSIGNED", "captainId": ...}})`
+- The first captain to click **ACCEPT** wins the booking (HTTP 200).
+- The backend immediately broadcasts `ride:no_longer_available` to dismiss the request from all other captains.
+- Any concurrent accept attempt receives **HTTP 409 Conflict** (`"Order already accepted by another captain"`).
+
+### 3. Full Ride Lifecycle
+1. **Customer Creates Booking** -> Sockets broadcast to eligible captains within 2 KM.
+2. **Captain Accepts** -> Status: `DRIVER_ASSIGNED`. Customer sees assigned Captain and live location.
+3. **Captain Arrives** -> Clicks `I HAVE ARRIVED`. Status: `DRIVER_ARRIVED`. Customer notified.
+4. **OTP Verification** -> Customer shares 4-digit Ride OTP. Captain enters OTP. Verified against database.
+5. **Start Ride** -> Status: `RIDE_STARTED`. Trip timer starts and coordinates stream live.
+6. **Complete Ride** -> Destination reached. Status: `RIDE_COMPLETED`. Final fare calculated and credited to Captain wallet. Captain status returns to `AVAILABLE`.
+
+---
+
+## 🧪 Automated Test Verification
+
+Run the end-to-end integration test:
+```bash
+python test_e2e.py
+```
+
+### Verified Test Results:
+* **Scenario 45 (2 KM Radius Filter)**: Captains A (0.46 km), B (0.77 km), C (1.15 km), and D (1.67 km) verified within 2 km; Captain E (2.55 km) excluded.
+* **Scenario 46 (Atomic Race Condition Safeguard)**: Simultaneous accept requests result in Captain A winning (200 OK) and Captain B receiving 409 Conflict.
+* **Full Ride Lifecycle**: Booking -> Dispatch -> Accept -> Arrived -> OTP Verified -> Ride Started -> Chat -> SOS -> Complete Ride -> Earnings Credited.
 
 ---
 
 ## 🚀 Running Locally
 
-### 1. Python Backend
+### 1. Start MongoDB
+Ensure MongoDB is running locally on `localhost:27017`.
+
+### 2. Start Backend (Port 5000)
 ```bash
 cd backend
-python -m pip install -r requirements.txt
-python main.py
+python -m uvicorn main:socket_app --host 0.0.0.0 --port 5000 --reload
 ```
-*API runs on `http://localhost:5000` (Swagger docs available at `http://localhost:5000/docs`)*
 
-### 2. React Customer Frontend
+### 3. Start Customer App (Port 5173)
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
-*Frontend runs on `http://localhost:5173`*
+
+### 4. Start Captain App (Port 5174)
+```bash
+cd captain-frontend
+npm install
+npm run dev
+```
+
+Open:
+- **Customer App**: `http://localhost:5173`
+- **Captain App**: `http://localhost:5174`
+- **API Health**: `http://localhost:5000/api/health`
