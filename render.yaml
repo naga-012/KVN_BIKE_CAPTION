@@ -1,0 +1,70 @@
+# Render Blueprint for KVN Ride-Booking Ecosystem
+# Deploy directly by creating a Blueprint Instance at https://dashboard.render.com/blueprints
+
+services:
+  # 1. FastAPI + Socket.io Real-time Backend Web Service
+  - type: web
+    name: kvn-backend
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:socket_app --host 0.0.0.0 --port $PORT
+    plan: free
+    autoDeploy: true
+    envVars:
+      - key: MONGO_URI
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CLIENT_URL
+        value: "*"
+      - key: PYTHON_VERSION
+        value: 3.11.9
+
+  # 2. Customer Ride-Booking Frontend (Static Site)
+  - type: web
+    name: kvn-customer-frontend
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    autoDeploy: true
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_API_URL
+        fromService:
+          type: web
+          name: kvn-backend
+          property: host
+      - key: VITE_SOCKET_URL
+        fromService:
+          type: web
+          name: kvn-backend
+          property: host
+
+  # 3. KVN Captain Partner Frontend (Static Site)
+  - type: web
+    name: kvn-captain-frontend
+    runtime: static
+    rootDir: captain-frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    autoDeploy: true
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_API_URL
+        fromService:
+          type: web
+          name: kvn-backend
+          property: host
+      - key: VITE_SOCKET_URL
+        fromService:
+          type: web
+          name: kvn-backend
+          property: host
