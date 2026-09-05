@@ -18,7 +18,7 @@ export const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 15000,
+  timeout: 60000,
 });
 
 // Attach JWT token to requests if available
@@ -30,13 +30,21 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Response interceptor to handle common errors
+// Handle errors uniformly
 api.interceptors.response.use(
   (response) => response.data,
   (error) => {
-    const message = error.response?.data?.detail || error.response?.data?.message || error.message || 'Request failed';
-    const status = error.response?.status;
-    return Promise.reject({ message, status, original: error });
+    let message = error.response?.data?.message || error.response?.data?.detail;
+    if (!message) {
+      if (error.code === 'ECONNABORTED' || error.message?.toLowerCase().includes('timeout')) {
+        message = 'Server is waking up (Render free tier takes ~30s). Please retry in a moment!';
+      } else if (error.message === 'Network Error') {
+        message = 'Unable to reach KVN server. The server may still be spinning up, please retry in a moment.';
+      } else {
+        message = error.message || 'An unexpected network error occurred';
+      }
+    }
+    return Promise.reject(new Error(message));
   }
 );
 

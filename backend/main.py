@@ -6,7 +6,8 @@ from datetime import datetime
 from typing import Optional, List, Dict, Any
 from bson import ObjectId
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks, Query
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Query, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -54,6 +55,21 @@ app.add_middleware(
 
 # Include Captain Routes
 app.include_router(captain_router)
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    origin = request.headers.get("origin")
+    headers = {
+        "Access-Control-Allow-Origin": origin if origin else "*",
+        "Access-Control-Allow-Credentials": "true",
+        "Access-Control-Allow-Headers": "*",
+        "Access-Control-Allow-Methods": "*",
+    }
+    return JSONResponse(
+        status_code=500,
+        content={"detail": str(exc), "message": "An internal server error occurred"},
+        headers=headers
+    )
 
 # Mount Socket.IO on ASGI
 socket_app = socketio.ASGIApp(sio, other_asgi_app=app)

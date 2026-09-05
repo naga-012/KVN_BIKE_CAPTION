@@ -4,16 +4,29 @@ from pymongo import MongoClient
 raw_uri = os.getenv("MONGO_URI", "").strip()
 MONGO_URI = raw_uri if raw_uri else "mongodb://localhost:27017/kvn_db"
 
+client = None
+db = None
+is_mongomock = False
+
 try:
-    client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=3000)
+    c = MongoClient(MONGO_URI, serverSelectionTimeoutMS=2000)
+    c.admin.command('ping')
+    client = c
     try:
         db = client.get_default_database()
     except Exception:
         db = client["kvn_db"]
+    print("[Database] Successfully connected to live MongoDB server!")
 except Exception as e:
-    print(f"[Database] Warning initializing MongoDB client: {e}. Fallback to local default.")
-    client = MongoClient("mongodb://localhost:27017/kvn_db", serverSelectionTimeoutMS=2000)
-    db = client["kvn_db"]
+    print(f"[Database] Live MongoDB connection unavailable ({e}). Activating mongomock in-memory database fallback.")
+    try:
+        import mongomock
+        client = mongomock.MongoClient()
+        db = client["kvn_db"]
+        is_mongomock = True
+    except ImportError:
+        client = MongoClient("mongodb://localhost:27017/kvn_db", serverSelectionTimeoutMS=2000)
+        db = client["kvn_db"]
 
 # Collections
 users_col = db["users"]
@@ -295,12 +308,11 @@ def _seed_data():
     print(f"[Database] Seeded/verified {len(default_captains)} captains (Captains A-E)")
 
 def init_db():
-    try:
-        # Check connection with a quick ping
-        client.admin.command('ping')
-    except Exception as e:
-        print(f"[Database] MongoDB not reachable at startup ({e}). Continuing in resilient mode.")
-        return
+    if not is_mongomock:
+        try:
+            client.admin.command('ping')
+        except Exception as e:
+            print(f"[Database] Live MongoDB ping failed ({e}).")
 
     try:
         _seed_data()
