@@ -36,17 +36,35 @@ async def handle_captain_online(sid, data):
     if not cpt_id:
         return
     
+    lat = data.get("lat")
+    lng = data.get("lng")
+
+    # Captain location is strictly required to go online
+    if lat is None or lng is None:
+        cpt = captains_col.find_one({"_id": ObjectId(cpt_id)}) if ObjectId.is_valid(cpt_id) else captains_col.find_one({"$or": [{"phone": cpt_id}, {"code": cpt_id}]})
+        loc = cpt.get("location", {}) if cpt else {}
+        if loc.get("lat") is None or loc.get("lng") is None:
+            await sio.emit("captain:error", {
+                "message": "Device GPS location is required to go online. Please turn on device location/GPS."
+            }, room=sid)
+            print(f"[Socket.IO] Rejected captain {cpt_id} go-online: Location is OFF.")
+            return
+        lat = loc.get("lat")
+        lng = loc.get("lng")
+
     captain_sid_map[cpt_id] = sid
     sid_captain_map[sid] = cpt_id
 
     await sio.enter_room(sid, "captains")
     await sio.enter_room(sid, f"captain_{cpt_id}")
 
-    update_fields = {"isOnline": True, "status": "AVAILABLE"}
-    if "lat" in data and "lng" in data:
-        update_fields["location.lat"] = float(data["lat"])
-        update_fields["location.lng"] = float(data["lng"])
-        update_fields["location.updatedAt"] = datetime.datetime.utcnow().isoformat()
+    update_fields = {
+        "isOnline": True,
+        "status": "AVAILABLE",
+        "location.lat": float(lat),
+        "location.lng": float(lng),
+        "location.updatedAt": datetime.datetime.utcnow().isoformat()
+    }
 
     try:
         if ObjectId.is_valid(cpt_id):
@@ -56,8 +74,12 @@ async def handle_captain_online(sid, data):
     except Exception as e:
         print(f"[Socket.IO] Error updating captain online status: {e}")
 
-    await sio.emit("captain:status_ack", {"status": "ONLINE", "isOnline": True}, room=sid)
-    print(f"[Socket.IO] Captain {cpt_id} is now ONLINE in room captains & captain_{cpt_id}")
+    await sio.emit("captain:status_ack", {
+        "status": "AVAILABLE",
+        "isOnline": True,
+        "location": {"lat": float(lat), "lng": float(lng)}
+    }, room=sid)
+    print(f"[Socket.IO] Captain {cpt_id} is now ONLINE at exact GPS location ({lat}, {lng})")
 
 @sio.on("captain:offline")
 async def handle_captain_offline(sid, data):

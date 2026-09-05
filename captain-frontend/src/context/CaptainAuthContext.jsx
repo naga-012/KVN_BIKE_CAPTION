@@ -1,6 +1,23 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import api from '../services/api';
 import socket from '../services/socket';
+
+const calculateDistanceKm = (lat1, lon1, lat2, lon2) => {
+  if (lat1 == null || lon1 == null || lat2 == null || lon2 == null) return 999;
+  if (lat1 === lat2 && lon1 === lon2) return 0;
+  const radlat1 = (Math.PI * lat1) / 180;
+  const radlat2 = (Math.PI * lat2) / 180;
+  const theta = lon1 - lon2;
+  const radtheta = (Math.PI * theta) / 180;
+  let dist =
+    Math.sin(radlat1) * Math.sin(radlat2) +
+    Math.cos(radlat1) * Math.cos(radlat2) * Math.cos(radtheta);
+  if (dist > 1) dist = 1;
+  dist = Math.acos(dist);
+  dist = (dist * 180) / Math.PI;
+  dist = dist * 60 * 1.1515 * 1.609344;
+  return dist;
+};
 
 const CaptainAuthContext = createContext(null);
 
@@ -14,26 +31,9 @@ export const CaptainAuthProvider = ({ children }) => {
     }
   });
   const [token, setToken] = useState(() => localStorage.getItem('kvn_captain_token') || null);
-  const [isOnline, setIsOnline] = useState(() => {
-    try {
-      const cached = localStorage.getItem('kvn_captain_profile');
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        return parsed.isOnline !== undefined ? Boolean(parsed.isOnline) : true;
-      }
-    } catch {}
-    return true; // Default to ONLINE
-  });
-  const [captainStatus, setCaptainStatus] = useState(() => {
-    try {
-      const cached = localStorage.getItem('kvn_captain_profile');
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        return parsed.status || (parsed.isOnline ? 'AVAILABLE' : 'OFFLINE');
-      }
-    } catch {}
-    return 'AVAILABLE';
-  });
+  const [isOnline, setIsOnline] = useState(false);
+  const [captainStatus, setCaptainStatus] = useState('OFFLINE');
+  const [isLocationActive, setIsLocationActive] = useState(false);
   const [currentLocation, setCurrentLocation] = useState({
     lat: 17.3228,
     lng: 78.5630,
@@ -43,6 +43,7 @@ export const CaptainAuthProvider = ({ children }) => {
   const [incomingRequest, setIncomingRequest] = useState(null);
   const [toasts, setToasts] = useState([]);
   const [allCaptains, setAllCaptains] = useState([]);
+  const watchIdRef = useRef(null);
 
   const addToast = useCallback((message, type = 'info') => {
     const id = Date.now() + Math.random();
@@ -140,6 +141,20 @@ export const CaptainAuthProvider = ({ children }) => {
       const reqVehicleType = (data.vehicleType || 'BIKE').toUpperCase();
       if (myVehicleType !== reqVehicleType) return;
 
+      // Strictly check distance from captain's exact location to pickup (2.0 km radius)
+      if (data.pickupLocation && data.pickupLocation.lat && data.pickupLocation.lng) {
+        const distKm = calculateDistanceKm(
+          currentLocation.lat,
+          currentLocation.lng,
+          data.pickupLocation.lat,
+          data.pickupLocation.lng
+        );
+        if (distKm > 2.0) {
+          console.log(`[Socket] Ride pickup is ${distKm.toFixed(2)} km away (> 2.0 km radius). Order rejected for captain ${cptId}.`);
+          return;
+        }
+      }
+
       // If specific eligible list provided, check membership
       if (data.eligibleCaptainIds && data.eligibleCaptainIds.length > 0) {
         const isEligible = data.eligibleCaptainIds.includes(String(cptId)) ||
@@ -224,6 +239,72 @@ export const CaptainAuthProvider = ({ children }) => {
     }
   };
 
+  // Geolocation Promise helper
+  const getDeviceLocation = () => {
+    return new Promise((resolve, reject) => {
+      if (!navigator.geolocation) {
+        reject(new Error('Device does not support GPS / Geolocation.'));
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          resolve({
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+            heading: pos.coords.heading || 0,
+            accuracy: pos.coords.accuracy,
+          });
+        },
+        (err) => {
+          let msg = 'Failed to get location';
+          if (err.code === err.PERMISSION_DENIED) {
+            msg = 'Location permission is required. Please turn on device GPS and allow location access to go online.';
+          } else if (err.code === err.POSITION_UNAVAILABLE) {
+            msg = 'Device location is OFF. Please turn on your device GPS / Location to go online.';
+          } else if (err.code === err.TIMEOUT) {
+            msg = 'Location request timed out. Please ensure GPS is enabled and retry.';
+          }
+          reject(new Error(msg));
+        },
+        { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+      );
+    });
+  };
+
+  const startLocationWatch = (cptId) => {
+    if (!navigator.geolocation) return;
+    if (watchIdRef.current !== null) {
+      navigator.geolocation.clearWatch(watchIdRef.current);
+    }
+    watchIdRef.current = navigator.geolocation.watchPosition(
+      (pos) => {
+        const updated = {
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+          heading: pos.coords.heading || 0,
+        };
+        setCurrentLocation(updated);
+        setIsLocationActive(true);
+        socket.emit('captain:location_update', {
+          captainId: cptId,
+          ...updated,
+        });
+      },
+      (err) => {
+        console.warn('Location watch warning:', err.message);
+      },
+      { enableHighAccuracy: true, maximumAge: 5000 }
+    );
+  };
+
+  const stopLocationWatch = () => {
+    if (watchIdRef.current !== null && navigator.geolocation) {
+      navigator.geolocation.clearWatch(watchIdRef.current);
+      watchIdRef.current = null;
+    }
+    setIsLocationActive(false);
+  };
+
   // Toggle Online/Offline
   const toggleOnline = async (forcedStatus = null) => {
     let currentCaptain = captain;
@@ -240,41 +321,86 @@ export const CaptainAuthProvider = ({ children }) => {
       }
     }
 
-    const nextOnline = forcedStatus !== null ? forcedStatus : !isOnline;
-    const nextStatus = nextOnline ? 'AVAILABLE' : 'OFFLINE';
+    const targetOnline = forcedStatus !== null ? forcedStatus : !isOnline;
     const cptId = currentCaptain ? (currentCaptain.id || currentCaptain._id || currentCaptain.code) : 'cpt_a';
 
-    // Optimistic UI update
-    setIsOnline(nextOnline);
-    setCaptainStatus(nextStatus);
+    if (targetOnline) {
+      // Captain MUST turn ON location first!
+      addToast('📍 Checking device GPS location...', 'info');
+      let exactLoc;
+      try {
+        exactLoc = await getDeviceLocation();
+      } catch (locErr) {
+        addToast(`⚠️ ${locErr.message}`, 'error');
+        setIsOnline(false);
+        setCaptainStatus('OFFLINE');
+        setIsLocationActive(false);
+        if (currentCaptain) {
+          const updated = { ...currentCaptain, isOnline: false, status: 'OFFLINE' };
+          setCaptain(updated);
+          localStorage.setItem('kvn_captain_profile', JSON.stringify(updated));
+        }
+        return false;
+      }
 
-    if (currentCaptain) {
-      const updated = { ...currentCaptain, isOnline: nextOnline, status: nextStatus };
-      setCaptain(updated);
-      localStorage.setItem('kvn_captain_profile', JSON.stringify(updated));
-    }
+      // Location successfully verified
+      setCurrentLocation(exactLoc);
+      setIsLocationActive(true);
+      setIsOnline(true);
+      setCaptainStatus('AVAILABLE');
 
-    if (nextOnline) {
+      if (currentCaptain) {
+        const updated = { ...currentCaptain, isOnline: true, status: 'AVAILABLE', location: exactLoc };
+        setCaptain(updated);
+        localStorage.setItem('kvn_captain_profile', JSON.stringify(updated));
+      }
+
+      startLocationWatch(cptId);
+
       socket.emit('captain:online', {
         captainId: cptId,
-        lat: currentLocation.lat,
-        lng: currentLocation.lng,
+        lat: exactLoc.lat,
+        lng: exactLoc.lng,
       });
-      addToast('🟢 You are ONLINE. Searching for nearby rides within 2 KM...', 'success');
+
+      addToast(`🟢 You are ONLINE at GPS location (${exactLoc.lat.toFixed(4)}, ${exactLoc.lng.toFixed(4)}). Listening for orders within 2 KM!`, 'success');
+
+      try {
+        await api.patch('/captains/status', {
+          captainId: cptId,
+          isOnline: true,
+          status: 'AVAILABLE',
+          lat: exactLoc.lat,
+          lng: exactLoc.lng,
+        });
+      } catch (err) {
+        console.warn('Status patch warning:', err.message);
+      }
     } else {
+      stopLocationWatch();
+      setIsOnline(false);
+      setCaptainStatus('OFFLINE');
+      setIsLocationActive(false);
+
+      if (currentCaptain) {
+        const updated = { ...currentCaptain, isOnline: false, status: 'OFFLINE' };
+        setCaptain(updated);
+        localStorage.setItem('kvn_captain_profile', JSON.stringify(updated));
+      }
+
       socket.emit('captain:offline', { captainId: cptId });
       setIncomingRequest(null);
       addToast('⚪ You are OFFLINE. Ride requests paused.', 'info');
-    }
 
-    try {
-      await api.patch('/captains/status', {
-        captainId: cptId,
-        isOnline: nextOnline,
-        status: nextStatus,
-      });
-    } catch (err) {
-      console.warn('Status patch warning:', err.message);
+      try {
+        await api.patch('/captains/status', {
+          captainId: cptId,
+          isOnline: false,
+          status: 'OFFLINE',
+        });
+      } catch (err) {
+        console.warn('Status patch warning:', err.message);
+      }
     }
   };
 
@@ -385,6 +511,7 @@ export const CaptainAuthProvider = ({ children }) => {
         setCaptain,
         token,
         isOnline,
+        isLocationActive,
         captainStatus,
         setCaptainStatus,
         currentLocation,

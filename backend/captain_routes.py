@@ -74,6 +74,8 @@ class CaptainStatusReq(BaseModel):
     captainId: str
     isOnline: bool
     status: Optional[str] = None  # ONLINE, OFFLINE, AVAILABLE, BUSY
+    lat: Optional[float] = None
+    lng: Optional[float] = None
 
 class CaptainLocationReq(BaseModel):
     captainId: str
@@ -204,22 +206,36 @@ def update_captain_status(req: CaptainStatusReq):
     else:
         query = {"$or": [{"phone": req.captainId}, {"code": req.captainId}]}
 
-    new_status = req.status or ("AVAILABLE" if req.isOnline else "OFFLINE")
-    captains_col.update_one(
-        query,
-        {"$set": {
-            "isOnline": req.isOnline,
-            "status": new_status,
-            "lastActive": datetime.datetime.utcnow().isoformat()
-        }}
-    )
-
     cpt = captains_col.find_one(query)
+    if not cpt:
+        raise HTTPException(status_code=404, detail="Captain not found")
+
+    new_status = req.status or ("AVAILABLE" if req.isOnline else "OFFLINE")
+    update_data = {
+        "isOnline": req.isOnline,
+        "status": new_status,
+        "lastActive": datetime.datetime.utcnow().isoformat()
+    }
+
+    if req.isOnline:
+        # Captain location must be turned on to go online
+        if req.lat is not None and req.lng is not None:
+            update_data["location.lat"] = req.lat
+            update_data["location.lng"] = req.lng
+            update_data["location.updatedAt"] = datetime.datetime.utcnow().isoformat()
+        else:
+            existing_loc = cpt.get("location") or {}
+            if existing_loc.get("lat") is None or existing_loc.get("lng") is None:
+                raise HTTPException(status_code=400, detail="Location is required to go online. Please turn on device GPS/Location.")
+
+    captains_col.update_one(query, {"$set": update_data})
+
+    updated_cpt = captains_col.find_one(query)
     return {
         "success": True,
         "isOnline": req.isOnline,
         "status": new_status,
-        "captain": serialize_doc(cpt)
+        "captain": serialize_doc(updated_cpt)
     }
 
 @captain_router.post("/captains/location")

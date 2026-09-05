@@ -250,16 +250,15 @@ AVAILABLE_CAPTAINS_POOL = [
 def get_captains_within_2km(pickup_lat: float, pickup_lng: float, vehicle_type: str = "BIKE"):
     """
     Finds all active captains positioned within exactly 2.0 km radius of customer pickup.
-    Checks live database 'captains' collection first; falls back to Telangana pool if needed.
+    Strictly checks online captains using their exact GPS coordinates.
+    Only captains with distance <= 2.0 km are returned.
     """
     results = []
     
-    # 1. Query live database captains
     try:
         query = {
             "isOnline": True,
             "status": "AVAILABLE",
-            "verificationStatus": "APPROVED"
         }
         live_captains = list(captains_col.find(query))
         for c in live_captains:
@@ -272,6 +271,7 @@ def get_captains_within_2km(pickup_lat: float, pickup_lng: float, vehicle_type: 
             if c_lat is None or c_lng is None:
                 continue
             dist = calculate_distance_km(pickup_lat, pickup_lng, c_lat, c_lng)
+            # Strict 2.0 km dispatch radius filter
             if dist <= 2.0:
                 results.append({
                     "id": str(c["_id"]),
@@ -291,28 +291,6 @@ def get_captains_within_2km(pickup_lat: float, pickup_lng: float, vehicle_type: 
     except Exception as e:
         print(f"[Dispatch] Error querying live captains: {e}")
 
-    # 2. If no live captains found in DB, fallback to seed pool
-    if not results:
-        for c in AVAILABLE_CAPTAINS_POOL:
-            cap_lat = pickup_lat + c["offsetLat"]
-            cap_lng = pickup_lng + c["offsetLng"]
-            dist = calculate_distance_km(pickup_lat, pickup_lng, cap_lat, cap_lng)
-            if dist <= 2.0:
-                results.append({
-                    "id": c["id"],
-                    "code": c["id"],
-                    "name": c["name"],
-                    "phone": c["phone"],
-                    "avatar": c["avatar"],
-                    "vehicleType": c["vehicleType"],
-                    "vehicle": c["vehicle"],
-                    "plateNumber": c["plateNumber"],
-                    "rating": c["rating"],
-                    "lat": round(cap_lat, 6),
-                    "lng": round(cap_lng, 6),
-                    "distanceKm": round(dist, 2),
-                    "etaMinutes": max(1, math.ceil(dist * 2.5)),
-                })
     results.sort(key=lambda x: x["distanceKm"])
     return results
 

@@ -23,6 +23,8 @@ export const CaptainDashboard = ({ onOpenScenarioTest }) => {
   const { 
     captain, 
     isOnline, 
+    isLocationActive,
+    currentLocation,
     captainStatus, 
     toggleOnline, 
     activeRide, 
@@ -69,9 +71,23 @@ export const CaptainDashboard = ({ onOpenScenarioTest }) => {
                   </div>
                   <p className="text-xs text-slate-400 mt-0.5">
                     {isOnline 
-                      ? 'Listening for nearby customer bookings within 2 KM radius...' 
-                      : 'Go online to receive nearby ride requests and start earning.'}
+                      ? 'Listening for customer bookings within 2 KM radius...' 
+                      : 'Turn on location and go online to receive nearby ride requests within 2 KM.'}
                   </p>
+                  {/* GPS & 2KM Radius Status Badge */}
+                  <div className="mt-2 flex items-center gap-2">
+                    {isOnline ? (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-950/80 text-emerald-400 border border-emerald-500/30">
+                        <MapPin className="w-3 h-3 text-emerald-400" />
+                        Exact GPS ({currentLocation.lat.toFixed(4)}, {currentLocation.lng.toFixed(4)}) • 2 KM Radius Active
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-950/70 text-amber-300 border border-amber-500/30">
+                        <MapPin className="w-3 h-3 text-amber-400" />
+                        GPS Location Required to Go Online
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 {/* Go Online / Go Offline Primary Button */}
