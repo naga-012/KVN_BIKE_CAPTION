@@ -1,10 +1,19 @@
 import os
 from pymongo import MongoClient
 
-MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017/kvn_db")
+raw_uri = os.getenv("MONGO_URI", "").strip()
+MONGO_URI = raw_uri if raw_uri else "mongodb://localhost:27017/kvn_db"
 
-client = MongoClient(MONGO_URI)
-db = client.get_default_database()
+try:
+    client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=3000)
+    try:
+        db = client.get_default_database()
+    except Exception:
+        db = client["kvn_db"]
+except Exception as e:
+    print(f"[Database] Warning initializing MongoDB client: {e}. Fallback to local default.")
+    client = MongoClient("mongodb://localhost:27017/kvn_db", serverSelectionTimeoutMS=2000)
+    db = client["kvn_db"]
 
 # Collections
 users_col = db["users"]
@@ -20,7 +29,7 @@ captain_earnings_col = db["captain_earnings"]
 ride_messages_col = db["ride_messages"]
 sos_alerts_col = db["sos_alerts"]
 
-def init_db():
+def _seed_data():
     # Seed default fare settings if missing
     if fare_settings_col.count_documents({}) == 0:
         default_fares = [
@@ -284,4 +293,18 @@ def init_db():
                 }}
             )
     print(f"[Database] Seeded/verified {len(default_captains)} captains (Captains A-E)")
+
+def init_db():
+    try:
+        # Check connection with a quick ping
+        client.admin.command('ping')
+    except Exception as e:
+        print(f"[Database] MongoDB not reachable at startup ({e}). Continuing in resilient mode.")
+        return
+
+    try:
+        _seed_data()
+    except Exception as e:
+        print(f"[Database] Note during seeding: {e}")
+
 
