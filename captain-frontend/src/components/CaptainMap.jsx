@@ -1,8 +1,9 @@
 import React, { useEffect, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import { useCaptainAuth } from '../context/CaptainAuthContext';
-import { Navigation2, MapPin, Flag, Compass } from 'lucide-react';
+import { Navigation2, MapPin, Flag, Compass, ExternalLink } from 'lucide-react';
 
 // Custom KVN Vehicle Marker Icon
 const createCaptainMarkerIcon = (vehicleType = 'BIKE', isOnline = true) => {
@@ -59,7 +60,7 @@ const createDropMarkerIcon = () => {
   });
 };
 
-// Helper component to smoothly center/re-center map
+// Helper component to smoothly center/re-center map and invalidate size
 function MapUpdater({ center, zoom }) {
   const map = useMap();
   useEffect(() => {
@@ -67,6 +68,16 @@ function MapUpdater({ center, zoom }) {
       map.flyTo(center, zoom || 15, { duration: 1.2 });
     }
   }, [center, zoom, map]);
+
+  useEffect(() => {
+    const t1 = setTimeout(() => map.invalidateSize(), 150);
+    const t2 = setTimeout(() => map.invalidateSize(), 600);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, [map]);
+
   return null;
 }
 
@@ -95,16 +106,20 @@ export const CaptainMap = ({ activeRide, incomingRequest }) => {
   const mapCenter = pickupPos && activeRide ? pickupPos : captainPos;
 
   return (
-    <div className="relative w-full h-full min-h-[420px] rounded-2xl overflow-hidden shadow-2xl border border-dark-600/70">
+    <div className="relative w-full h-full min-h-[350px] md:min-h-[420px] rounded-2xl overflow-hidden shadow-2xl border border-dark-600/70 bg-dark-900">
       <MapContainer
         center={mapCenter}
         zoom={14}
         zoomControl={false}
         className="w-full h-full"
+        style={{ minHeight: '350px', height: '100%', width: '100%' }}
       >
+        {/* Google Maps Road Tile Layer */}
         <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          attribution='&copy; <a href="https://www.google.com/maps">Google Maps</a>'
+          url="https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}"
+          subdomains={['mt0', 'mt1', 'mt2', 'mt3']}
+          maxZoom={20}
         />
 
         <MapUpdater center={mapCenter} zoom={activeRide ? 15 : 14} />

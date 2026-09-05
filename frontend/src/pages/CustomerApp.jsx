@@ -480,29 +480,69 @@ export const CustomerApp = () => {
                   <div className="flex items-center justify-between p-3 rounded-xl bg-slate-800/80 border border-slate-700/60">
                     <div className="flex items-center gap-3">
                       <img
-                        src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&q=80"
+                        src={activeRide.captainAvatar || activeRide.driver?.avatar || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&q=80"}
                         alt="Driver"
                         className="w-12 h-12 rounded-full border border-teal-500/40 object-cover"
                       />
                       <div>
-                        <div className="font-bold text-white text-sm">Suresh Kumar</div>
-                        <div className="text-xs text-slate-400 font-medium">Honda Activa 6G • <span className="text-teal-400 font-bold">KA 03 ER 4589</span></div>
-                        <div className="text-[11px] text-amber-400 font-semibold">★ 4.88 (48 ratings)</div>
+                        <div className="font-bold text-white text-sm">
+                          {activeRide.captainName || activeRide.driver?.name || 'Captain Ramesh Yadav'}
+                        </div>
+                        <div className="text-xs text-slate-400 font-medium">
+                          {activeRide.captainVehicle || activeRide.driver?.vehicle || 'Honda Activa 6G'} • <span className="text-teal-400 font-bold">{activeRide.captainPlateNumber || activeRide.driver?.plateNumber || 'TS 08 EA 4589'}</span>
+                        </div>
+                        <div className="text-[11px] text-amber-400 font-semibold">★ 4.92 (Telangana KVN Captain)</div>
                       </div>
                     </div>
                   </div>
+
+                  {/* Google Location Navigation Link */}
+                  <a
+                    href={`https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(activeRide.pickupLocation?.address || `${activeRide.pickupLocation?.lat},${activeRide.pickupLocation?.lng}`)}&destination=${encodeURIComponent(activeRide.dropLocation?.address || `${activeRide.dropLocation?.lat},${activeRide.dropLocation?.lng}`)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-between p-3 rounded-xl bg-blue-950/40 hover:bg-blue-900/50 border border-blue-500/30 text-blue-300 text-xs font-bold transition-all"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Navigation className="w-4 h-4 text-blue-400" />
+                      <span>View Live Google Location & Route ↗</span>
+                    </span>
+                    <span className="text-[10px] text-slate-400">Google Maps GPS</span>
+                  </a>
+
+                  {/* Rider Complete Ride Button */}
+                  {activeRide.status === 'RIDE_STARTED' && (
+                    <button
+                      onClick={async () => {
+                        try {
+                          await api.post(`/rides/${activeRide._id}/complete`);
+                          addToast('Trip completed! Thank you for riding with KVN.', 'success');
+                          const updated = await api.get(`/rides/${activeRide._id}`);
+                          setActiveRide(updated.ride);
+                          setCompletedRideData(updated.ride);
+                          setIsPaymentOpen(true);
+                        } catch (e) {
+                          handleAdvanceStatus();
+                        }
+                      }}
+                      className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-sm uppercase tracking-wider transition-all shadow-glow flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      <CheckCircle className="w-5 h-5 text-slate-950" />
+                      <span>I HAVE REACHED DESTINATION — COMPLETE RIDE</span>
+                    </button>
+                  )}
 
                   {/* Trip Progression Simulation Bar */}
                   <div className="p-3 rounded-xl bg-slate-800/50 border border-slate-700/60 flex items-center justify-between text-xs">
                     <span className="text-slate-300 font-semibold flex items-center gap-1.5">
                       <PlayCircle className="w-4 h-4 text-teal-400" />
-                      <span>Simulate Ride Progress:</span>
+                      <span>Trip Status:</span>
                     </span>
                     <button
                       onClick={handleAdvanceStatus}
-                      className="px-3 py-1.5 rounded-lg bg-teal-500 hover:bg-teal-400 text-slate-950 font-black text-xs transition-all shadow-glow"
+                      className="px-3 py-1.5 rounded-lg bg-teal-500 hover:bg-teal-400 text-slate-950 font-black text-xs transition-all shadow-glow cursor-pointer"
                     >
-                      {activeRide.status === 'DRIVER_ASSIGNED' && 'Driver Arrive'}
+                      {activeRide.status === 'DRIVER_ASSIGNED' && 'Driver Arrived'}
                       {activeRide.status === 'DRIVER_ARRIVED' && 'Start Ride'}
                       {activeRide.status === 'RIDE_STARTED' && 'Complete Ride'}
                     </button>

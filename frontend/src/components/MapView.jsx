@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, Polyline, Circle, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 
 // Custom SVG Icons
 const createHtmlIcon = (htmlContent, size = [36, 36]) => {
@@ -37,7 +38,7 @@ const getDriverIcon = (type = 'BIKE') => {
   `, [36, 36]);
 };
 
-// Component to dynamically fit bounds to include pickup and drop
+// Component to dynamically fit bounds and invalidate size
 const MapRecenter = ({ pickup, drop, driverLocation }) => {
   const map = useMap();
 
@@ -54,6 +55,15 @@ const MapRecenter = ({ pickup, drop, driverLocation }) => {
       map.fitBounds(bounds, { padding: [60, 60] });
     }
   }, [pickup, drop, driverLocation, map]);
+
+  useEffect(() => {
+    const t1 = setTimeout(() => map.invalidateSize(), 150);
+    const t2 = setTimeout(() => map.invalidateSize(), 600);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, [map]);
 
   return null;
 };
@@ -92,16 +102,20 @@ export const MapView = ({
   ] : [];
 
   return (
-    <div className={`relative ${className}`}>
+    <div className={`relative ${className} bg-slate-900`}>
       <MapContainer
         center={center}
         zoom={14}
         zoomControl={false}
         className="w-full h-full"
+        style={{ minHeight: '350px', height: '100%', width: '100%' }}
       >
+        {/* Google Maps Road Tile Layer */}
         <TileLayer
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+          attribution='&copy; <a href="https://www.google.com/maps">Google Maps</a>'
+          url="https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}"
+          subdomains={['mt0', 'mt1', 'mt2', 'mt3']}
+          maxZoom={20}
         />
 
         <MapRecenter pickup={pickup} drop={drop} driverLocation={driverLocation} />

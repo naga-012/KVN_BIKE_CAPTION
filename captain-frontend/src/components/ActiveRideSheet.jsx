@@ -143,25 +143,41 @@ export const ActiveRideSheet = ({
           </div>
 
           {/* Customer & Route Quick Details */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-dark-900/60 p-3.5 rounded-2xl border border-dark-600/70 text-xs">
-            <div className="space-y-1.5">
-              <div className="flex items-center gap-2">
-                <div className="w-2.5 h-2.5 rounded-full bg-emerald-400"></div>
-                <span className="text-[11px] font-bold text-emerald-400 uppercase">Pickup</span>
+          <div className="bg-dark-900/60 p-3.5 rounded-2xl border border-dark-600/70 text-xs space-y-2.5">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <div className="w-2.5 h-2.5 rounded-full bg-emerald-400"></div>
+                  <span className="text-[11px] font-bold text-emerald-400 uppercase">Pickup</span>
+                </div>
+                <p className="text-slate-200 font-medium pl-4 line-clamp-1">
+                  {ride.pickupLocation?.address || 'Pickup Point'}
+                </p>
               </div>
-              <p className="text-slate-200 font-medium pl-4 line-clamp-1">
-                {ride.pickupLocation?.address || 'Pickup Point'}
-              </p>
+
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <div className="w-2.5 h-2.5 rounded-full bg-rose-400"></div>
+                  <span className="text-[11px] font-bold text-rose-400 uppercase">Drop</span>
+                </div>
+                <p className="text-slate-200 font-medium pl-4 line-clamp-1">
+                  {ride.dropLocation?.address || 'Drop Destination'}
+                </p>
+              </div>
             </div>
 
-            <div className="space-y-1.5">
-              <div className="flex items-center gap-2">
-                <div className="w-2.5 h-2.5 rounded-full bg-rose-400"></div>
-                <span className="text-[11px] font-bold text-rose-400 uppercase">Drop</span>
-              </div>
-              <p className="text-slate-200 font-medium pl-4 line-clamp-1">
-                {ride.dropLocation?.address || 'Drop Destination'}
-              </p>
+            {/* Google Location Navigation Link */}
+            <div className="pt-1 flex items-center justify-between border-t border-dark-700/60">
+              <a
+                href={`https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(ride.pickupLocation?.address || `${ride.pickupLocation?.lat},${ride.pickupLocation?.lng}`)}&destination=${encodeURIComponent(ride.dropLocation?.address || `${ride.dropLocation?.lat},${ride.dropLocation?.lng}`)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-blue-500/15 hover:bg-blue-500/25 text-blue-400 border border-blue-500/30 text-xs font-bold transition-all"
+              >
+                <Navigation className="w-3.5 h-3.5 text-blue-400" />
+                <span>Open Google Maps Location & Navigation ↗</span>
+              </a>
+              <span className="text-[10px] text-slate-400 font-medium">Turn-by-turn GPS</span>
             </div>
           </div>
 
@@ -188,13 +204,13 @@ export const ActiveRideSheet = ({
           </div>
 
           {/* Action Step Buttons */}
-          <div className="pt-2">
+          <div className="pt-2 pb-2">
             {/* Step 1: Navigating to pickup */}
             {status === 'DRIVER_ASSIGNED' && (
               <button
                 onClick={handleMarkArrived}
                 disabled={loading}
-                className="w-full py-4 rounded-2xl bg-gradient-to-r from-brand-500 to-brand-600 hover:from-brand-400 hover:to-brand-500 text-dark-900 font-black text-sm tracking-wider uppercase transition-all shadow-glow-gold flex items-center justify-center gap-2"
+                className="w-full py-4 rounded-2xl bg-gradient-to-r from-brand-500 to-brand-600 hover:from-brand-400 hover:to-brand-500 text-dark-900 font-black text-sm tracking-wider uppercase transition-all shadow-glow-gold flex items-center justify-center gap-2 cursor-pointer active:scale-[0.98]"
               >
                 <CheckCircle className="w-5 h-5 text-dark-900" />
                 <span>{loading ? 'UPDATING...' : 'I HAVE ARRIVED AT PICKUP'}</span>
@@ -205,7 +221,7 @@ export const ActiveRideSheet = ({
             {status === 'DRIVER_ARRIVED' && (
               <button
                 onClick={onOpenOtpModal}
-                className="w-full py-4 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-dark-900 font-black text-sm tracking-wider uppercase transition-all shadow-glow-emerald flex items-center justify-center gap-2 animate-bounce-short"
+                className="w-full py-4 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-dark-900 font-black text-sm tracking-wider uppercase transition-all shadow-glow-emerald flex items-center justify-center gap-2 animate-bounce-short cursor-pointer active:scale-[0.98]"
               >
                 <KeyRound className="w-5 h-5 text-dark-900" />
                 <span>ENTER 4-DIGIT RIDE OTP</span>
@@ -217,9 +233,9 @@ export const ActiveRideSheet = ({
               <button
                 onClick={handleCompleteRide}
                 disabled={loading}
-                className="w-full py-4 rounded-2xl bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-dark-900 font-black text-sm tracking-wider uppercase transition-all shadow-glow-emerald flex items-center justify-center gap-2"
+                className="w-full py-4.5 px-6 rounded-2xl bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-dark-900 font-black text-base tracking-wider uppercase transition-all shadow-glow-emerald flex items-center justify-center gap-2.5 cursor-pointer active:scale-[0.98] border-2 border-emerald-300/40"
               >
-                <Flag className="w-5 h-5 text-dark-900" />
+                <Flag className="w-6 h-6 text-dark-900" />
                 <span>{loading ? 'CALCULATING FARE...' : 'COMPLETE RIDE'}</span>
               </button>
             )}

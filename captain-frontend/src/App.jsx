@@ -46,75 +46,79 @@ function CaptainMainApp() {
         {activeTab === 'auth' && <CaptainAuthPage onSuccess={() => setActiveTab('home')} />}
       </main>
 
-      {/* Bottom Navigation Bar (Mobile-first responsive) */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-dark-900/95 backdrop-blur-lg border-t border-dark-600/80 px-4 py-2 flex items-center justify-around shadow-2xl md:hidden">
-        <button
-          onClick={() => setActiveTab('home')}
-          className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition-all ${
-            activeTab === 'home' ? 'text-brand-400 font-bold' : 'text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          <Navigation className="w-5 h-5" />
-          <span className="text-[10px] uppercase tracking-wider">Home</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('rides')}
-          className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition-all ${
-            activeTab === 'rides' ? 'text-brand-400 font-bold' : 'text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          <History className="w-5 h-5" />
-          <span className="text-[10px] uppercase tracking-wider">Rides</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('earnings')}
-          className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition-all ${
-            activeTab === 'earnings' ? 'text-brand-400 font-bold' : 'text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          <IndianRupee className="w-5 h-5" />
-          <span className="text-[10px] uppercase tracking-wider">Earnings</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('profile')}
-          className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition-all ${
-            activeTab === 'profile' ? 'text-brand-400 font-bold' : 'text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          <User className="w-5 h-5" />
-          <span className="text-[10px] uppercase tracking-wider">Profile</span>
-        </button>
-      </nav>
-
-      {/* Desktop Floating Tab Bar for Desktop layout */}
-      <div className="hidden md:flex fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-dark-800/90 backdrop-blur-md border border-dark-600 rounded-full px-4 py-2 shadow-2xl items-center gap-1">
-        {[
-          { id: 'home', label: 'Dashboard', icon: Navigation },
-          { id: 'rides', label: 'Ride History', icon: History },
-          { id: 'earnings', label: 'Earnings', icon: IndianRupee },
-          { id: 'profile', label: 'Profile & Vehicle', icon: User },
-        ].map((tab) => {
-          const Icon = tab.icon;
-          const isActive = activeTab === tab.id;
-          return (
+      {/* Bottom Navigation Bar (Hidden during active trip to avoid covering COMPLETE RIDE button) */}
+      {!activeRide && (
+        <>
+          <nav className="fixed bottom-0 left-0 right-0 z-40 bg-dark-900/95 backdrop-blur-lg border-t border-dark-600/80 px-4 py-2 flex items-center justify-around shadow-2xl md:hidden">
             <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider transition-all ${
-                isActive
-                  ? 'bg-brand-500 text-dark-900 shadow-glow-gold'
-                  : 'text-slate-400 hover:text-white hover:bg-dark-700'
+              onClick={() => setActiveTab('home')}
+              className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition-all ${
+                activeTab === 'home' ? 'text-brand-400 font-bold' : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              <Icon className="w-4 h-4" />
-              <span>{tab.label}</span>
+              <Navigation className="w-5 h-5" />
+              <span className="text-[10px] uppercase tracking-wider">Home</span>
             </button>
-          );
-        })}
-      </div>
+
+            <button
+              onClick={() => setActiveTab('rides')}
+              className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition-all ${
+                activeTab === 'rides' ? 'text-brand-400 font-bold' : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <History className="w-5 h-5" />
+              <span className="text-[10px] uppercase tracking-wider">Rides</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('earnings')}
+              className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition-all ${
+                activeTab === 'earnings' ? 'text-brand-400 font-bold' : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <IndianRupee className="w-5 h-5" />
+              <span className="text-[10px] uppercase tracking-wider">Earnings</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('profile')}
+              className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition-all ${
+                activeTab === 'profile' ? 'text-brand-400 font-bold' : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <User className="w-5 h-5" />
+              <span className="text-[10px] uppercase tracking-wider">Profile</span>
+            </button>
+          </nav>
+
+          {/* Desktop Floating Tab Bar */}
+          <div className="hidden md:flex fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-dark-800/90 backdrop-blur-md border border-dark-600 rounded-full px-4 py-2 shadow-2xl items-center gap-1">
+            {[
+              { id: 'home', label: 'Dashboard', icon: Navigation },
+              { id: 'rides', label: 'Ride History', icon: History },
+              { id: 'earnings', label: 'Earnings', icon: IndianRupee },
+              { id: 'profile', label: 'Profile & Vehicle', icon: User },
+            ].map((tab) => {
+              const Icon = tab.icon;
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider transition-all ${
+                    isActive
+                      ? 'bg-brand-500 text-dark-900 shadow-glow-gold'
+                      : 'text-slate-400 hover:text-white hover:bg-dark-700'
+                  }`}
+                >
+                  <Icon className="w-4 h-4" />
+                  <span>{tab.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </>
+      )}
 
       {/* Toast Notification Container */}
       <div className="fixed top-20 right-4 z-50 flex flex-col gap-2 pointer-events-none max-w-sm w-full">
