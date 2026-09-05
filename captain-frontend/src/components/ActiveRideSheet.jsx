@@ -142,6 +142,44 @@ export const ActiveRideSheet = ({
             </div>
           </div>
 
+          {/* PRIMARY ACTION BUTTON — PLACED UP AT TOP OF DASHBOARD */}
+          <div className="pt-1 pb-1">
+            {/* Step 1: Navigating to pickup */}
+            {status === 'DRIVER_ASSIGNED' && (
+              <button
+                onClick={handleMarkArrived}
+                disabled={loading}
+                className="w-full py-4.5 px-6 rounded-2xl bg-gradient-to-r from-amber-500 via-brand-500 to-amber-500 hover:from-amber-400 hover:to-brand-400 text-dark-900 font-black text-base md:text-lg tracking-wider uppercase transition-all shadow-glow-gold flex items-center justify-center gap-3 cursor-pointer active:scale-[0.98] border-2 border-amber-300"
+              >
+                <CheckCircle className="w-6 h-6 text-dark-900 shrink-0" />
+                <span>{loading ? 'UPDATING STATUS...' : 'I HAVE ARRIVED AT PICKUP LOCATION'}</span>
+              </button>
+            )}
+
+            {/* Step 2: Arrived, waiting for OTP */}
+            {status === 'DRIVER_ARRIVED' && (
+              <button
+                onClick={onOpenOtpModal}
+                className="w-full py-4.5 px-6 rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-500 hover:from-emerald-400 hover:to-teal-400 text-dark-900 font-black text-base md:text-lg tracking-wider uppercase transition-all shadow-glow-emerald flex items-center justify-center gap-3 animate-bounce-short cursor-pointer active:scale-[0.98] border-2 border-emerald-300"
+              >
+                <KeyRound className="w-6 h-6 text-dark-900 shrink-0" />
+                <span>ENTER 4-DIGIT RIDE OTP</span>
+              </button>
+            )}
+
+            {/* Step 3: Trip in progress */}
+            {status === 'RIDE_STARTED' && (
+              <button
+                onClick={handleCompleteRide}
+                disabled={loading}
+                className="w-full py-4.5 px-6 rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-dark-900 font-black text-base md:text-lg tracking-wider uppercase transition-all shadow-glow-emerald flex items-center justify-center gap-3 cursor-pointer active:scale-[0.98] border-2 border-emerald-300"
+              >
+                <Flag className="w-6 h-6 text-dark-900 shrink-0" />
+                <span>{loading ? 'CALCULATING FARE...' : 'COMPLETE RIDE'}</span>
+              </button>
+            )}
+          </div>
+
           {/* Customer & Route Quick Details */}
           <div className="bg-dark-900/60 p-3.5 rounded-2xl border border-dark-600/70 text-xs space-y-2.5">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -201,44 +239,6 @@ export const ActiveRideSheet = ({
                 Earn ₹{driverEarning}
               </span>
             </div>
-          </div>
-
-          {/* Action Step Buttons */}
-          <div className="pt-2 pb-2">
-            {/* Step 1: Navigating to pickup */}
-            {status === 'DRIVER_ASSIGNED' && (
-              <button
-                onClick={handleMarkArrived}
-                disabled={loading}
-                className="w-full py-4 rounded-2xl bg-gradient-to-r from-brand-500 to-brand-600 hover:from-brand-400 hover:to-brand-500 text-dark-900 font-black text-sm tracking-wider uppercase transition-all shadow-glow-gold flex items-center justify-center gap-2 cursor-pointer active:scale-[0.98]"
-              >
-                <CheckCircle className="w-5 h-5 text-dark-900" />
-                <span>{loading ? 'UPDATING...' : 'I HAVE ARRIVED AT PICKUP'}</span>
-              </button>
-            )}
-
-            {/* Step 2: Arrived, waiting for OTP */}
-            {status === 'DRIVER_ARRIVED' && (
-              <button
-                onClick={onOpenOtpModal}
-                className="w-full py-4 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-dark-900 font-black text-sm tracking-wider uppercase transition-all shadow-glow-emerald flex items-center justify-center gap-2 animate-bounce-short cursor-pointer active:scale-[0.98]"
-              >
-                <KeyRound className="w-5 h-5 text-dark-900" />
-                <span>ENTER 4-DIGIT RIDE OTP</span>
-              </button>
-            )}
-
-            {/* Step 3: Trip in progress */}
-            {status === 'RIDE_STARTED' && (
-              <button
-                onClick={handleCompleteRide}
-                disabled={loading}
-                className="w-full py-4.5 px-6 rounded-2xl bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-dark-900 font-black text-base tracking-wider uppercase transition-all shadow-glow-emerald flex items-center justify-center gap-2.5 cursor-pointer active:scale-[0.98] border-2 border-emerald-300/40"
-              >
-                <Flag className="w-6 h-6 text-dark-900" />
-                <span>{loading ? 'CALCULATING FARE...' : 'COMPLETE RIDE'}</span>
-              </button>
-            )}
           </div>
         </div>
       </div>
