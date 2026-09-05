@@ -6,12 +6,34 @@ const CaptainAuthContext = createContext(null);
 
 export const CaptainAuthProvider = ({ children }) => {
   const [captain, setCaptain] = useState(() => {
-    const cached = localStorage.getItem('kvn_captain_profile');
-    return cached ? JSON.parse(cached) : null;
+    try {
+      const cached = localStorage.getItem('kvn_captain_profile');
+      return cached ? JSON.parse(cached) : null;
+    } catch {
+      return null;
+    }
   });
   const [token, setToken] = useState(() => localStorage.getItem('kvn_captain_token') || null);
-  const [isOnline, setIsOnline] = useState(false);
-  const [captainStatus, setCaptainStatus] = useState('OFFLINE'); // OFFLINE, AVAILABLE, BUSY
+  const [isOnline, setIsOnline] = useState(() => {
+    try {
+      const cached = localStorage.getItem('kvn_captain_profile');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        return parsed.isOnline !== undefined ? Boolean(parsed.isOnline) : true;
+      }
+    } catch {}
+    return true; // Default to ONLINE
+  });
+  const [captainStatus, setCaptainStatus] = useState(() => {
+    try {
+      const cached = localStorage.getItem('kvn_captain_profile');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        return parsed.status || (parsed.isOnline ? 'AVAILABLE' : 'OFFLINE');
+      }
+    } catch {}
+    return 'AVAILABLE';
+  });
   const [currentLocation, setCurrentLocation] = useState({
     lat: 17.3228,
     lng: 78.5630,
@@ -204,35 +226,55 @@ export const CaptainAuthProvider = ({ children }) => {
 
   // Toggle Online/Offline
   const toggleOnline = async (forcedStatus = null) => {
-    if (!captain) return;
+    let currentCaptain = captain;
+    if (!currentCaptain) {
+      try {
+        const storedCode = localStorage.getItem('kvn_captain_code') || 'cpt_a';
+        const res = await api.get(`/captains/me?captainId=${storedCode}`);
+        if (res.success && res.captain) {
+          currentCaptain = res.captain;
+          setCaptain(res.captain);
+        }
+      } catch (e) {
+        console.warn('Could not auto-fetch captain profile:', e);
+      }
+    }
+
     const nextOnline = forcedStatus !== null ? forcedStatus : !isOnline;
-    const cptId = captain.id || captain._id || captain.code;
+    const nextStatus = nextOnline ? 'AVAILABLE' : 'OFFLINE';
+    const cptId = currentCaptain ? (currentCaptain.id || currentCaptain._id || currentCaptain.code) : 'cpt_a';
+
+    // Optimistic UI update
+    setIsOnline(nextOnline);
+    setCaptainStatus(nextStatus);
+
+    if (currentCaptain) {
+      const updated = { ...currentCaptain, isOnline: nextOnline, status: nextStatus };
+      setCaptain(updated);
+      localStorage.setItem('kvn_captain_profile', JSON.stringify(updated));
+    }
+
+    if (nextOnline) {
+      socket.emit('captain:online', {
+        captainId: cptId,
+        lat: currentLocation.lat,
+        lng: currentLocation.lng,
+      });
+      addToast('🟢 You are ONLINE. Searching for nearby rides within 2 KM...', 'success');
+    } else {
+      socket.emit('captain:offline', { captainId: cptId });
+      setIncomingRequest(null);
+      addToast('⚪ You are OFFLINE. Ride requests paused.', 'info');
+    }
 
     try {
-      const res = await api.patch('/captains/status', {
+      await api.patch('/captains/status', {
         captainId: cptId,
         isOnline: nextOnline,
-        status: nextOnline ? 'AVAILABLE' : 'OFFLINE',
+        status: nextStatus,
       });
-
-      if (res.success) {
-        setIsOnline(nextOnline);
-        setCaptainStatus(nextOnline ? 'AVAILABLE' : 'OFFLINE');
-        if (nextOnline) {
-          socket.emit('captain:online', {
-            captainId: cptId,
-            lat: currentLocation.lat,
-            lng: currentLocation.lng,
-          });
-          addToast('🟢 You are ONLINE. Searching for nearby rides within 2 KM...', 'success');
-        } else {
-          socket.emit('captain:offline', { captainId: cptId });
-          setIncomingRequest(null);
-          addToast('⚪ You are OFFLINE. Ride requests paused.', 'info');
-        }
-      }
     } catch (err) {
-      addToast(err.message || 'Failed to update online status', 'error');
+      console.warn('Status patch warning:', err.message);
     }
   };
 
