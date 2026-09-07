@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { MapContainer, TileLayer, Marker, Polyline, Circle, useMap, useMapEvents } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Polyline, Circle, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -39,22 +39,22 @@ const getDriverIcon = (type = 'BIKE') => {
 };
 
 // Component to dynamically fit bounds and invalidate size
-const MapRecenter = ({ pickup, drop, driverLocation }) => {
+const MapRecenter = ({ pLat, pLng, dLat, dLng, drLat, drLng, hasPickup, hasDrop, hasDriver }) => {
   const map = useMap();
 
   useEffect(() => {
     const points = [];
-    if (pickup?.lat && pickup?.lng) points.push([pickup.lat, pickup.lng]);
-    if (drop?.lat && drop?.lng) points.push([drop.lat, drop.lng]);
-    if (driverLocation?.lat && driverLocation?.lng) points.push([driverLocation.lat, driverLocation.lng]);
+    if (hasPickup) points.push([pLat, pLng]);
+    if (hasDrop) points.push([dLat, dLng]);
+    if (hasDriver) points.push([drLat, drLng]);
 
     if (points.length === 1) {
-      map.setView(points[0], 14);
+      map.flyTo(points[0], 14, { duration: 1 });
     } else if (points.length >= 2) {
       const bounds = L.latLngBounds(points);
-      map.fitBounds(bounds, { padding: [60, 60] });
+      map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
     }
-  }, [pickup, drop, driverLocation, map]);
+  }, [pLat, pLng, dLat, dLng, drLat, drLng, hasPickup, hasDrop, hasDriver, map]);
 
   useEffect(() => {
     const t1 = setTimeout(() => map.invalidateSize(), 150);
@@ -91,14 +91,24 @@ export const MapView = ({
 }) => {
   const defaultCenter = [17.3850, 78.4867]; // Hyderabad, Telangana center
 
-  const center = pickup?.lat ? [pickup.lat, pickup.lng] : defaultCenter;
+  const pLat = Number(pickup?.lat);
+  const pLng = Number(pickup?.lng);
+  const dLat = Number(drop?.lat);
+  const dLng = Number(drop?.lng);
+  const drLat = Number(driverLocation?.lat);
+  const drLng = Number(driverLocation?.lng);
 
-  // Simple straight polyline between points (or simulated road curve)
-  const polylinePositions = pickup?.lat && drop?.lat ? [
-    [pickup.lat, pickup.lng],
-    // midpoint slight offset for realistic curve
-    [(pickup.lat + drop.lat) / 2 + 0.003, (pickup.lng + drop.lng) / 2 + 0.003],
-    [drop.lat, drop.lng],
+  const hasPickup = !isNaN(pLat) && !isNaN(pLng) && pLat !== 0;
+  const hasDrop = !isNaN(dLat) && !isNaN(dLng) && dLat !== 0;
+  const hasDriver = !isNaN(drLat) && !isNaN(drLng) && drLat !== 0;
+
+  const center = hasPickup ? [pLat, pLng] : defaultCenter;
+
+  // Simple road curved polyline between pickup and drop points
+  const polylinePositions = (hasPickup && hasDrop) ? [
+    [pLat, pLng],
+    [(pLat + dLat) / 2 + 0.003, (pLng + dLng) / 2 + 0.003],
+    [dLat, dLng],
   ] : [];
 
   return (
@@ -118,13 +128,23 @@ export const MapView = ({
           maxZoom={20}
         />
 
-        <MapRecenter pickup={pickup} drop={drop} driverLocation={driverLocation} />
+        <MapRecenter 
+          pLat={pLat} 
+          pLng={pLng} 
+          dLat={dLat} 
+          dLng={dLng} 
+          drLat={drLat} 
+          drLng={drLng} 
+          hasPickup={hasPickup} 
+          hasDrop={hasDrop} 
+          hasDriver={hasDriver} 
+        />
         <ClickHandler onMapClick={onMapClick} />
 
         {/* 2km Radius Circle around Pickup */}
-        {pickup?.lat && pickup?.lng && (
+        {hasPickup && (
           <Circle
-            center={[pickup.lat, pickup.lng]}
+            center={[pLat, pLng]}
             radius={2000}
             pathOptions={{
               color: '#14b8a6',
@@ -137,30 +157,46 @@ export const MapView = ({
         )}
 
         {/* Nearby Available Captains within 2km (searching state) */}
-        {!driverLocation && nearbyCaptains?.map((cap, idx) => (
-          cap.lat && cap.lng ? (
+        {!driverLocation && nearbyCaptains?.map((cap, idx) => {
+          const capLat = Number(cap.lat);
+          const capLng = Number(cap.lng);
+          return (!isNaN(capLat) && !isNaN(capLng)) ? (
             <Marker
               key={cap.id || idx}
-              position={[cap.lat, cap.lng]}
+              position={[capLat, capLng]}
               icon={getDriverIcon(cap.vehicleType || 'BIKE')}
             />
-          ) : null
-        ))}
+          ) : null;
+        })}
 
         {/* Pickup Marker */}
-        {pickup?.lat && pickup?.lng && (
-          <Marker position={[pickup.lat, pickup.lng]} icon={pickupIcon} />
+        {hasPickup && (
+          <Marker position={[pLat, pLng]} icon={pickupIcon}>
+            <Popup>
+              <div className="p-1 text-xs">
+                <p className="font-bold text-teal-600">Pickup Location</p>
+                <p className="text-slate-700 font-medium">{pickup?.address || 'Pickup Point'}</p>
+              </div>
+            </Popup>
+          </Marker>
         )}
 
-        {/* Drop Marker */}
-        {drop?.lat && drop?.lng && (
-          <Marker position={[drop.lat, drop.lng]} icon={dropIcon} />
+        {/* Drop Marker (Destination) */}
+        {hasDrop && (
+          <Marker position={[dLat, dLng]} icon={dropIcon}>
+            <Popup>
+              <div className="p-1 text-xs">
+                <p className="font-bold text-rose-600">Destination Drop</p>
+                <p className="text-slate-700 font-medium">{drop?.address || 'Drop Point'}</p>
+              </div>
+            </Popup>
+          </Marker>
         )}
 
         {/* Live Driver Marker */}
-        {driverLocation?.lat && driverLocation?.lng && (
+        {hasDriver && (
           <Marker
-            position={[driverLocation.lat, driverLocation.lng]}
+            position={[drLat, drLng]}
             icon={getDriverIcon(vehicleType)}
           />
         )}

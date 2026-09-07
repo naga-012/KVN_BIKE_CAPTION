@@ -109,8 +109,9 @@ export const LocationSearchInput = ({
       setIsLoading(true);
       try {
         const res = await api.get(`/locations/search?q=${encodeURIComponent(trimmed)}`);
-        if (res.data?.locations && res.data.locations.length > 0) {
-          setSuggestions(res.data.locations);
+        const locs = res?.locations || res?.data?.locations || (Array.isArray(res) ? res : []);
+        if (locs && locs.length > 0) {
+          setSuggestions(locs);
         } else {
           // Fallback filter from popular spots if offline
           const fallback = POPULAR_TELANGANA_SPOTS.filter(
@@ -131,19 +132,21 @@ export const LocationSearchInput = ({
       } finally {
         setIsLoading(false);
       }
-    }, 220);
+    }, 200);
 
     return () => clearTimeout(timer);
   }, [query, isOpen]);
 
   const handleSelect = (item) => {
-    const selectedAddress = item.title ? `${item.title}, ${item.subtitle}` : item.address;
+    const selectedAddress = item.title ? `${item.title}, ${item.subtitle}` : (item.address || 'Selected Location');
+    const lat = Number(item.lat);
+    const lng = Number(item.lng);
     setQuery(selectedAddress);
     setIsOpen(false);
     onSelectLocation({
       address: selectedAddress,
-      lat: item.lat,
-      lng: item.lng,
+      lat: !isNaN(lat) ? lat : 17.3850,
+      lng: !isNaN(lng) ? lng : 78.4867,
     });
   };
 
@@ -197,6 +200,14 @@ export const LocationSearchInput = ({
               onChange={(e) => {
                 setQuery(e.target.value);
                 setIsOpen(true);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  if (suggestions.length > 0) {
+                    handleSelect(suggestions[0]);
+                  }
+                }
               }}
               placeholder={placeholder}
               className="w-full bg-slate-900/60 border border-slate-700/80 hover:border-slate-600 focus:border-teal-400 rounded-xl px-3 py-2 pr-8 text-xs text-white placeholder-slate-500 focus:outline-none transition-all shadow-inner"
