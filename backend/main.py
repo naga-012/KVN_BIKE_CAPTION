@@ -185,6 +185,16 @@ class AcceptRideReq(BaseModel):
     phone: Optional[str] = None
     avatar: Optional[str] = None
 
+class SkipRideReq(BaseModel):
+    captainId: str
+    reason: Optional[str] = None
+
+class CaptainSkipRideReq(BaseModel):
+    rideId: str
+    captainId: str
+    reason: Optional[str] = None
+
+
 # --- Available Telangana Captains Pool ---
 AVAILABLE_CAPTAINS_POOL = [
     {
@@ -864,20 +874,78 @@ async def create_ride(req: CreateRideReq):
     return {"success": True, "ride": ride_doc, "broadcastCount": len(captains_within_2km)}
 
 @app.get("/api/captains/active-order")
-def get_active_order_for_captains():
+def get_active_order_for_captains(captainId: Optional[str] = Query(None)):
     """
-    Returns the latest customer order in SEARCHING_DRIVER status.
-    Ensures online captains receive customer bookings immediately.
+    Returns active customer orders in SEARCHING_DRIVER status.
+    Excludes orders that have been skipped by this captain.
+    Returns:
+      - activeOrder: the latest available order (backwards compatible)
+      - activeOrders: list of all available orders currently searchable and not skipped by captainId
+      - totalAvailable: count of available orders
     """
-    order = rides_col.find_one({"status": "SEARCHING_DRIVER"}, sort=[("createdAt", -1)])
-    if not order:
-        return {"success": True, "activeOrder": None, "captainsWithin2km": []}
+    query: dict = {"status": "SEARCHING_DRIVER"}
+    if captainId and str(captainId).strip():
+        query["skippedCaptains"] = {"$ne": str(captainId).strip()}
+
+    orders = list(rides_col.find(query).sort("createdAt", -1).limit(20))
+    serialized_orders = [serialize_doc(o) for o in orders]
+    first_order = serialized_orders[0] if serialized_orders else None
 
     return {
         "success": True,
-        "activeOrder": serialize_doc(order),
-        "captainsWithin2km": order.get("broadcastCaptains", [])
+        "activeOrder": first_order,
+        "activeOrders": serialized_orders,
+        "totalAvailable": len(serialized_orders),
+        "captainsWithin2km": first_order.get("broadcastCaptains", []) if first_order else []
     }
+
+@app.post("/api/rides/{ride_id}/skip")
+def skip_ride_by_captain(ride_id: str, req: SkipRideReq):
+    """
+    Records that a captain has skipped this ride.
+    The ride will no longer appear for this captain, but remains
+    SEARCHING_DRIVER for other captains within range.
+    """
+    cpt_id = str(req.captainId).strip()
+    if not cpt_id:
+        raise HTTPException(status_code=400, detail="captainId is required")
+
+    try:
+        query = {"_id": ObjectId(ride_id)} if ObjectId.is_valid(ride_id) else {"_id": ride_id}
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid ride ID format")
+
+    ride = rides_col.find_one(query)
+    if not ride:
+        raise HTTPException(status_code=404, detail="Ride not found")
+
+    rides_col.update_one(
+        query,
+        {
+            "$addToSet": {"skippedCaptains": cpt_id},
+            "$push": {
+                "skipHistory": {
+                    "captainId": cpt_id,
+                    "reason": req.reason or "Captain skipped ride",
+                    "skippedAt": datetime.utcnow().isoformat()
+                }
+            }
+        }
+    )
+
+    return {
+        "success": True,
+        "message": f"Ride {ride_id} marked as skipped for captain {cpt_id}",
+        "rideId": ride_id
+    }
+
+@app.post("/api/captains/skip-ride")
+def captain_skip_ride_alias(req: CaptainSkipRideReq):
+    """
+    Alias endpoint for captains to skip a ride.
+    """
+    return skip_ride_by_captain(req.rideId, SkipRideReq(captainId=req.captainId, reason=req.reason))
+
 
 @app.post("/api/rides/{ride_id}/accept")
 def accept_ride_by_captain(ride_id: str, req: AcceptRideReq, background_tasks: BackgroundTasks):

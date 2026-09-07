@@ -24,17 +24,31 @@ export const CaptainDashboard = ({ onOpenScenarioTest }) => {
     captain, 
     isOnline, 
     isLocationActive,
-    currentLocation,
+    currentLocation, 
     captainStatus, 
     toggleOnline, 
     activeRide, 
     incomingRequest, 
+    incomingRequests,
+    currentRequestIndex,
+    selectRequest,
+    skipRide,
     setIncomingRequest 
   } = useCaptainAuth();
 
   const [isOtpModalOpen, setIsOtpModalOpen] = useState(false);
   const [isChatModalOpen, setIsChatModalOpen] = useState(false);
   const [isSosModalOpen, setIsSosModalOpen] = useState(false);
+  const [isRequestModalOpen, setIsRequestModalOpen] = useState(true);
+
+  // Auto-open modal when new requests arrive
+  useEffect(() => {
+    if (incomingRequests && incomingRequests.length > 0) {
+      setIsRequestModalOpen(true);
+    }
+  }, [incomingRequests?.length]);
+
+  const activeReq = incomingRequest || (incomingRequests && incomingRequests[currentRequestIndex]);
 
   return (
     <div className="relative flex-1 flex flex-col h-[calc(100vh-65px)] overflow-hidden">
@@ -42,8 +56,51 @@ export const CaptainDashboard = ({ onOpenScenarioTest }) => {
       <div className="flex-1 relative w-full h-full">
         <CaptainMap 
           activeRide={activeRide} 
-          incomingRequest={incomingRequest} 
+          incomingRequest={activeReq}
+          incomingRequests={incomingRequests}
+          currentRequestIndex={currentRequestIndex}
+          onSelectRequest={selectRequest}
         />
+
+        {/* Floating Multi-Ride Queue Bar (Visible when multiple requests are available or modal dismissed) */}
+        {!activeRide && incomingRequests && incomingRequests.length > 0 && !isRequestModalOpen && (
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 w-11/12 max-w-md animate-in slide-in-from-top-4">
+            <div className="bg-dark-800/95 border-2 border-brand-500/80 rounded-2xl shadow-2xl p-3 backdrop-blur-md flex items-center justify-between">
+              <div 
+                className="flex items-center gap-2.5 cursor-pointer flex-1"
+                onClick={() => setIsRequestModalOpen(true)}
+              >
+                <div className="w-8 h-8 rounded-xl bg-brand-500 text-dark-900 flex items-center justify-center font-black text-sm animate-pulse">
+                  {incomingRequests.length}
+                </div>
+                <div>
+                  <p className="text-xs font-black text-white flex items-center gap-1.5">
+                    <span>{incomingRequests.length} Rides Available</span>
+                    <span className="text-[10px] px-1.5 py-0.2 rounded bg-brand-500/20 text-brand-400 font-mono">
+                      ₹{activeReq?.estimatedFare || 50}
+                    </span>
+                  </p>
+                  <p className="text-[10px] text-slate-400">Tap to view or accept ride</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1.5 pl-2 border-l border-dark-600">
+                <button
+                  onClick={() => activeReq && skipRide(activeReq.rideId || activeReq.ride_id || activeReq.id || activeReq._id)}
+                  className="px-2.5 py-1.5 rounded-xl bg-dark-700 hover:bg-dark-600 text-amber-400 text-xs font-bold transition-all border border-amber-500/30"
+                >
+                  SKIP
+                </button>
+                <button
+                  onClick={() => setIsRequestModalOpen(true)}
+                  className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-brand-500 to-brand-600 text-dark-900 text-xs font-black uppercase tracking-wider shadow-md"
+                >
+                  VIEW
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Bottom Interface Container */}
@@ -136,13 +193,14 @@ export const CaptainDashboard = ({ onOpenScenarioTest }) => {
         )}
       </div>
 
-      {/* Incoming Ride Request Modal (Simultaneous 2KM Broadcast) */}
-      {incomingRequest && (
+      {/* Incoming Ride Request Modal (Simultaneous 2KM Broadcast & Multi-Ride Queue) */}
+      {(activeReq || (incomingRequests && incomingRequests.length > 0)) && isRequestModalOpen && (
         <RideRequestModal
-          request={incomingRequest}
-          onClose={() => setIncomingRequest(null)}
+          request={activeReq}
+          onClose={() => setIsRequestModalOpen(false)}
         />
       )}
+
 
       {/* OTP Verification Modal */}
       {isOtpModalOpen && activeRide && (

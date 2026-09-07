@@ -43,6 +43,30 @@ const createPickupMarkerIcon = () => {
   });
 };
 
+// Numbered Multi-Ride Pickup Marker Icon
+const createNumberedPickupMarkerIcon = (number, fare, isSelected = false) => {
+  const bg = isSelected ? '#F59E0B' : '#10B981';
+  const textColor = '#0D111A';
+  const scale = isSelected ? 'scale(1.15)' : 'scale(1)';
+  const zIndex = isSelected ? 30 : 15;
+
+  return L.divIcon({
+    className: 'custom-numbered-pickup-marker',
+    html: `
+      <div style="position: relative; width: 68px; height: 46px; display: flex; flex-direction: column; align-items: center; justify-content: center; transform: ${scale}; z-index: ${zIndex}; transition: transform 0.2s ease;">
+        <div style="background: ${bg}; color: ${textColor}; font-weight: 900; font-size: 10px; padding: 2px 7px; border-radius: 6px; box-shadow: 0 3px 10px rgba(0,0,0,0.5); text-transform: uppercase; letter-spacing: 0.5px; border: 1.5px solid #ffffff; white-space: nowrap; display: flex; align-items: center; gap: 3px;">
+          <span>#${number}</span>
+          <span>₹${fare}</span>
+        </div>
+        <div style="width: 14px; height: 14px; border-radius: 50%; background: ${bg}; border: 2.5px solid #ffffff; box-shadow: 0 2px 6px rgba(0,0,0,0.6); margin-top: -2px;"></div>
+      </div>
+    `,
+    iconSize: [68, 46],
+    iconAnchor: [34, 42],
+  });
+};
+
+
 // Customer Drop Marker Icon
 const createDropMarkerIcon = () => {
   return L.divIcon({
@@ -90,14 +114,21 @@ function MapUpdater({ captainPos, pickupPos, dropPos, activeRide }) {
   return null;
 }
 
-export const CaptainMap = ({ activeRide, incomingRequest }) => {
+export const CaptainMap = ({ 
+  activeRide, 
+  incomingRequest,
+  incomingRequests = [],
+  currentRequestIndex = 0,
+  onSelectRequest 
+}) => {
   const { captain, currentLocation, isOnline } = useCaptainAuth();
 
   const captainPos = [currentLocation.lat || 17.3228, currentLocation.lng || 78.5630];
 
-  // Active ride locations
-  const pickupLoc = activeRide?.pickupLocation || incomingRequest?.pickupLocation;
-  const dropLoc = activeRide?.dropLocation || incomingRequest?.dropLocation;
+  // Active ride locations or currently selected request locations
+  const selectedReq = incomingRequests.length > 0 ? incomingRequests[currentRequestIndex] : incomingRequest;
+  const pickupLoc = activeRide?.pickupLocation || selectedReq?.pickupLocation;
+  const dropLoc = activeRide?.dropLocation || selectedReq?.dropLocation;
 
   const pickupPos = pickupLoc?.lat && pickupLoc?.lng ? [pickupLoc.lat, pickupLoc.lng] : null;
   const dropPos = dropLoc?.lat && dropLoc?.lng ? [dropLoc.lat, dropLoc.lng] : null;
@@ -149,8 +180,45 @@ export const CaptainMap = ({ activeRide, incomingRequest }) => {
           </Popup>
         </Marker>
 
-        {/* Customer Pickup Marker */}
-        {pickupPos && (
+        {/* Multiple Incoming Ride Requests Markers (when captain is online and not on active trip) */}
+        {!activeRide && incomingRequests && incomingRequests.length > 0 && (
+          incomingRequests.map((req, idx) => {
+            if (!req.pickupLocation?.lat || !req.pickupLocation?.lng) return null;
+            const pos = [req.pickupLocation.lat, req.pickupLocation.lng];
+            const isSelected = idx === currentRequestIndex;
+            const fare = req.estimatedFare || req.fareBreakdown?.totalFare || 50;
+            const rId = req.rideId || req.ride_id || req.id || req._id || idx;
+
+            return (
+              <Marker
+                key={rId}
+                position={pos}
+                icon={createNumberedPickupMarkerIcon(idx + 1, fare, isSelected)}
+                eventHandlers={{
+                  click: () => {
+                    if (onSelectRequest) onSelectRequest(idx);
+                  },
+                }}
+              >
+                <Popup>
+                  <div className="p-1 text-xs space-y-1">
+                    <div className="flex items-center gap-1.5 font-bold text-brand-500">
+                      <span>Ride #{idx + 1}</span>
+                      <span>• ₹{fare}</span>
+                      {isSelected && <span className="text-[9px] px-1 bg-brand-500/20 rounded text-brand-600">SELECTED</span>}
+                    </div>
+                    <p className="text-slate-700 font-medium">{req.customerName || 'Customer'}</p>
+                    <p className="text-slate-500 text-[11px]">{req.pickupLocation.address || 'Pickup Point'}</p>
+                    <p className="text-slate-400 text-[10px]">Distance: {req.distanceKm || 2} KM</p>
+                  </div>
+                </Popup>
+              </Marker>
+            );
+          })
+        )}
+
+        {/* Fallback Single Pickup Marker (if active ride) */}
+        {activeRide && pickupPos && (
           <Marker position={pickupPos} icon={createPickupMarkerIcon()}>
             <Popup>
               <div className="p-1 text-xs">
@@ -172,6 +240,7 @@ export const CaptainMap = ({ activeRide, incomingRequest }) => {
             </Popup>
           </Marker>
         )}
+
 
         {/* Route Line */}
         {routePoints.length >= 2 && (

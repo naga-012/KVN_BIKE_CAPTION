@@ -40,10 +40,23 @@ export const CaptainAuthProvider = ({ children }) => {
     heading: 0
   });
   const [activeRide, setActiveRide] = useState(null);
-  const [incomingRequest, setIncomingRequest] = useState(null);
+  const [incomingRequests, setIncomingRequests] = useState([]);
+  const [currentRequestIndex, setCurrentRequestIndex] = useState(0);
+  const [skippedRideIds, setSkippedRideIds] = useState(() => new Set());
+  const incomingRequest = incomingRequests[currentRequestIndex] || null;
+  const setIncomingRequest = useCallback((req) => {
+    if (!req) {
+      setIncomingRequests([]);
+      setCurrentRequestIndex(0);
+    } else {
+      setIncomingRequests([req]);
+      setCurrentRequestIndex(0);
+    }
+  }, []);
   const [toasts, setToasts] = useState([]);
   const [allCaptains, setAllCaptains] = useState([]);
   const watchIdRef = useRef(null);
+
 
   const addToast = useCallback((message, type = 'info') => {
     const id = Date.now() + Math.random();
@@ -117,57 +130,77 @@ export const CaptainAuthProvider = ({ children }) => {
 
   // Resilient fallback: Check active broadcasting orders from KVN Bike Booking
   const checkActiveBroadcastOrder = useCallback(async () => {
-    if (!isOnline || activeRide || incomingRequest) return;
+    if (!isOnline || activeRide) return;
     try {
       const cptId = captain?.id || captain?._id || captain?.code || 'cpt_a';
       const res = await api.get(`/captains/active-order?captainId=${cptId}`);
-      if (res.success && res.activeOrder && res.activeOrder.status === 'SEARCHING_DRIVER') {
-        const order = res.activeOrder;
-        
-        // Strictly only accept bookings from KVN Bike Booking
-        if (order.source && order.source !== 'KVN_BIKE_BOOKING') {
-          return;
-        }
-
+      if (res.success) {
+        const rawOrders = res.activeOrders || (res.activeOrder ? [res.activeOrder] : []);
         const myVType = (captain?.vehicleType || 'BIKE').toUpperCase();
-        const ordVType = (order.vehicleType || 'BIKE').toUpperCase();
-        if (myVType !== ordVType) return;
 
-        const rId = order.id || order._id;
-        let dist = 2.0;
-        if (order.pickupLocation?.lat && order.pickupLocation?.lng) {
-          dist = calculateDistanceKm(
-            currentLocation.lat,
-            currentLocation.lng,
-            order.pickupLocation.lat,
-            order.pickupLocation.lng
-          );
+        const validOrders = [];
+        for (const order of rawOrders) {
+          if (!order || order.status !== 'SEARCHING_DRIVER') continue;
+          if (order.source && order.source !== 'KVN_BIKE_BOOKING') continue;
+
+          const ordVType = (order.vehicleType || 'BIKE').toUpperCase();
+          if (myVType !== ordVType) continue;
+
+          const rId = String(order.id || order._id || order.rideId);
+          if (skippedRideIds.has(rId)) continue;
+
+          let dist = 2.0;
+          if (order.pickupLocation?.lat && order.pickupLocation?.lng) {
+            dist = calculateDistanceKm(
+              currentLocation.lat,
+              currentLocation.lng,
+              order.pickupLocation.lat,
+              order.pickupLocation.lng
+            );
+          }
+
+          validOrders.push({
+            ...order,
+            rideId: rId,
+            ride_id: rId,
+            source: 'KVN_BIKE_BOOKING',
+            customerName: order.customerName || 'KVN Customer',
+            customerPhone: order.customerPhone || '',
+            estimatedFare: order.fareBreakdown?.totalFare || order.estimatedFare || 50,
+            distanceKm: order.distanceKm || (dist < 999 ? Number(dist.toFixed(1)) : 2.0),
+          });
         }
 
-        console.log('[Poll] Active KVN Bike Booking order detected for online captain:', rId);
-        setIncomingRequest({
-          ...order,
-          rideId: rId,
-          ride_id: rId,
-          source: 'KVN_BIKE_BOOKING',
-          customerName: order.customerName || 'KVN Customer',
-          customerPhone: order.customerPhone || '',
-          estimatedFare: order.fareBreakdown?.totalFare || 50,
-          distanceKm: order.distanceKm || (dist < 999 ? Number(dist.toFixed(1)) : 2.0),
+        setIncomingRequests((prev) => {
+          const prevIds = new Set(prev.map((r) => String(r.rideId || r.ride_id || r.id || r._id)));
+          const newOrders = validOrders.filter((o) => !prevIds.has(String(o.rideId)));
+
+          if (newOrders.length > 0) {
+            playBeepSound();
+            if (prev.length === 0) {
+              if (validOrders.length === 1) {
+                addToast(`🔔 New KVN Ride Request: ₹${validOrders[0].estimatedFare} • ${validOrders[0].pickupLocation?.address || 'Pickup'}`, 'warning');
+              } else {
+                addToast(`🔔 ${validOrders.length} KVN Ride Requests Available within 2 KM!`, 'warning');
+              }
+            } else {
+              addToast(`🔔 +${newOrders.length} more KVN ride request available!`, 'warning');
+            }
+          }
+
+          return validOrders;
         });
-        addToast(`🔔 New KVN Ride Request: ₹${order.fareBreakdown?.totalFare || 50} • ${order.pickupLocation?.address || 'Pickup'}`, 'warning');
-        playBeepSound();
       }
     } catch (err) {
       // non-blocking
     }
-  }, [isOnline, activeRide, incomingRequest, captain, currentLocation, addToast]);
+  }, [isOnline, activeRide, captain, currentLocation, skippedRideIds, addToast]);
 
   useEffect(() => {
-    if (!isOnline || activeRide || incomingRequest) return;
+    if (!isOnline || activeRide) return;
     const pollInterval = setInterval(checkActiveBroadcastOrder, 2500);
     return () => clearInterval(pollInterval);
-  }, [checkActiveBroadcastOrder, isOnline, activeRide, incomingRequest]);
+  }, [checkActiveBroadcastOrder, isOnline, activeRide]);
 
   // Socket Connection and Event Listeners
   useEffect(() => {
@@ -189,7 +222,7 @@ export const CaptainAuthProvider = ({ children }) => {
 
       // Check if captain is eligible (online, available)
       if (!isOnline) return;
-      if (captainStatus === 'BUSY') return;
+      if (captainStatus === 'BUSY' || activeRide) return;
 
       // Only give rides to the captain who are booking from KVN Bike Booking!
       if (data.source && data.source !== 'KVN_BIKE_BOOKING') {
@@ -201,6 +234,12 @@ export const CaptainAuthProvider = ({ children }) => {
       const reqVehicleType = (data.vehicleType || 'BIKE').toUpperCase();
       if (myVehicleType !== reqVehicleType) return;
 
+      const rId = String(data.rideId || data.ride_id || data.id || data._id);
+      if (skippedRideIds.has(rId)) {
+        console.log(`[Socket] Ride ${rId} already skipped by captain, ignoring.`);
+        return;
+      }
+
       let distKm = 2.0;
       if (data.pickupLocation && data.pickupLocation.lat && data.pickupLocation.lng) {
         distKm = calculateDistanceKm(
@@ -211,8 +250,7 @@ export const CaptainAuthProvider = ({ children }) => {
         );
       }
 
-      const rId = data.rideId || data.ride_id || data.id || data._id;
-      setIncomingRequest({
+      const formatted = {
         ...data,
         rideId: rId,
         ride_id: rId,
@@ -221,27 +259,39 @@ export const CaptainAuthProvider = ({ children }) => {
         customerPhone: data.customerPhone || '',
         distanceKm: data.distanceKm || (distKm < 999 ? Number(distKm.toFixed(1)) : 2.0),
         estimatedFare: data.estimatedFare || data.fareBreakdown?.totalFare || 50,
+      };
+
+      setIncomingRequests((prev) => {
+        const exists = prev.some((r) => String(r.rideId || r.ride_id || r.id || r._id) === rId);
+        if (exists) {
+          return prev.map((r) => (String(r.rideId || r.ride_id || r.id || r._id) === rId ? formatted : r));
+        }
+        playBeepSound();
+        addToast(`🔔 New KVN Ride Request: ₹${formatted.estimatedFare} • ${formatted.pickupLocation?.address || 'Pickup'}`, 'warning');
+        return [...prev, formatted];
       });
-      addToast(`🔔 New KVN Ride Request: ₹${data.estimatedFare || data.fareBreakdown?.totalFare || 50} • ${data.pickupLocation?.address || 'Pickup'}`, 'warning');
-      playBeepSound();
     };
 
     // Handle ride cancelled / accepted by another captain
     const handleRideNoLongerAvailable = (data) => {
       console.log('[Socket] Ride no longer available:', data);
-      setIncomingRequest((current) => {
-        if (current && (current.rideId === data.rideId || current.ride_id === data.rideId)) {
+      const rId = String(data.rideId || data.ride_id || data.id || data._id);
+      setIncomingRequests((prev) => {
+        const found = prev.some((r) => String(r.rideId || r.ride_id || r.id || r._id) === rId);
+        if (found) {
           addToast(data.reason || 'Ride accepted by another Captain.', 'info');
-          return null;
+          return prev.filter((r) => String(r.rideId || r.ride_id || r.id || r._id) !== rId);
         }
-        return current;
+        return prev;
       });
+      setCurrentRequestIndex((curr) => Math.max(0, curr - 1));
     };
 
     // Handle when THIS captain successfully accepted
     const handleAcceptedSuccess = (data) => {
       console.log('[Socket] Ride accepted success:', data);
-      setIncomingRequest(null);
+      setIncomingRequests([]);
+      setCurrentRequestIndex(0);
       setActiveRide(data.ride);
       setCaptainStatus('BUSY');
       addToast('🎉 Ride booking confirmed! Navigate to customer.', 'success');
@@ -264,6 +314,7 @@ export const CaptainAuthProvider = ({ children }) => {
     socket.on('ride:cancelled', handleRideNoLongerAvailable);
     socket.on('ride:accepted_success', handleAcceptedSuccess);
     socket.on('ride:status_changed', handleStatusChanged);
+
 
     return () => {
       socket.off('ride:new_request', handleNewRequest);
@@ -544,6 +595,66 @@ export const CaptainAuthProvider = ({ children }) => {
     }
   };
 
+  // Skip a ride from the queue
+  const skipRide = useCallback(async (rideId, reason = 'Captain skipped ride') => {
+    if (!rideId) return;
+    const rId = String(rideId);
+
+    // Record locally in skippedRideIds
+    setSkippedRideIds((prev) => {
+      const next = new Set(prev);
+      next.add(rId);
+      return next;
+    });
+
+    // Remove from incomingRequests
+    setIncomingRequests((prev) => {
+      const updated = prev.filter((r) => String(r.rideId || r.ride_id || r.id || r._id) !== rId);
+      return updated;
+    });
+
+    // Adjust index safely
+    setCurrentRequestIndex((prev) => (prev > 0 ? prev - 1 : 0));
+    addToast('⏭️ Ride skipped. Checking other available rides...', 'info');
+
+    // Notify backend
+    try {
+      const cptId = captain?.id || captain?._id || captain?.code || 'cpt_a';
+      await api.post(`/rides/${rId}/skip`, {
+        captainId: cptId,
+        reason: reason,
+      });
+    } catch (err) {
+      console.warn('Backend skip recording error:', err.message);
+    }
+  }, [captain, addToast]);
+
+  // Navigate through multiple incoming requests
+  const nextRequest = useCallback(() => {
+    setIncomingRequests((prev) => {
+      if (prev.length <= 1) return prev;
+      setCurrentRequestIndex((curr) => (curr + 1) % prev.length);
+      return prev;
+    });
+  }, []);
+
+  const prevRequest = useCallback(() => {
+    setIncomingRequests((prev) => {
+      if (prev.length <= 1) return prev;
+      setCurrentRequestIndex((curr) => (curr - 1 + prev.length) % prev.length);
+      return prev;
+    });
+  }, []);
+
+  const selectRequest = useCallback((idx) => {
+    setCurrentRequestIndex(idx);
+  }, []);
+
+  const clearIncomingRequests = useCallback(() => {
+    setIncomingRequests([]);
+    setCurrentRequestIndex(0);
+  }, []);
+
   // Logout handler
   const logout = () => {
     if (isOnline) {
@@ -552,7 +663,8 @@ export const CaptainAuthProvider = ({ children }) => {
     setCaptain(null);
     setToken(null);
     setActiveRide(null);
-    setIncomingRequest(null);
+    setIncomingRequests([]);
+    setCurrentRequestIndex(0);
     localStorage.removeItem('kvn_captain_token');
     localStorage.removeItem('kvn_captain_profile');
     localStorage.removeItem('kvn_captain_code');
@@ -575,7 +687,16 @@ export const CaptainAuthProvider = ({ children }) => {
         activeRide,
         setActiveRide,
         incomingRequest,
+        incomingRequests,
+        currentRequestIndex,
+        setCurrentRequestIndex,
         setIncomingRequest,
+        skipRide,
+        nextRequest,
+        prevRequest,
+        selectRequest,
+        clearIncomingRequests,
+        skippedRideIds,
         toasts,
         addToast,
         allCaptains,
@@ -592,6 +713,7 @@ export const CaptainAuthProvider = ({ children }) => {
     </CaptainAuthContext.Provider>
   );
 };
+
 
 export const useCaptainAuth = () => {
   const context = useContext(CaptainAuthContext);
