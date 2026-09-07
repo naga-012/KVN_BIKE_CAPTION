@@ -369,10 +369,10 @@ TELANGANA_LANDMARKS = [
     {
         "title": "BIET College (Bharat Institute of Eng & Tech)",
         "subtitle": "Mangalpally, Ibrahimpatnam, Ranga Reddy, Telangana",
-        "address": "Bharat Institute of Engineering and Technology (BIET), Ibrahimpatnam, Telangana",
-        "lat": 17.1895,
-        "lng": 78.6534,
-        "tags": ["biet", "biet college", "bharat institute", "ibrahimpatnam"]
+        "address": "Bharat Institute of Engineering and Technology (BIET), Mangalpally, Ibrahimpatnam, Telangana",
+        "lat": 17.2056,
+        "lng": 78.6007,
+        "tags": ["biet", "biet college", "bharat institute", "mangalpally", "ibrahimpatnam", "sheriguda"]
     },
     {
         "title": "Hitec City Cyber Towers",
@@ -610,6 +610,69 @@ def search_locations(q: str = Query(..., min_length=1)):
         "success": True,
         "query": q,
         "locations": matched[:8]
+    }
+
+@app.get("/api/locations/reverse")
+def reverse_geocode(lat: float = Query(...), lng: float = Query(...)):
+    """
+    Fast reverse geocoder for customer clicked points on the map:
+    1. Checks if clicked point is near a known Telangana landmark (< 1.5 KM)
+    2. Enriches via Nominatim reverse geocode
+    3. Fallback to coordinate label
+    """
+    # 1. Nearby known Telangana landmark check
+    closest = None
+    min_dist = float("inf")
+    for item in TELANGANA_LANDMARKS:
+        d = haversine_distance(lat, lng, item["lat"], item["lng"])
+        if d < min_dist:
+            min_dist = d
+            closest = item
+
+    if closest and min_dist <= 1.2:
+        return {
+            "success": True,
+            "address": f"{closest['title']}, {closest['subtitle']}",
+            "landmark": closest["title"],
+            "distanceKm": round(min_dist, 2),
+            "lat": lat,
+            "lng": lng,
+            "source": "verified_telangana_landmark"
+        }
+
+    # 2. Query Nominatim reverse geocoder
+    try:
+        import urllib.request
+        import json as pyjson
+        url = f"https://nominatim.openstreetmap.org/reverse?lat={lat}&lon={lng}&format=json"
+        req = urllib.request.Request(url, headers={"User-Agent": "KVNRidesTelanganaApp/2.0"})
+        with urllib.request.urlopen(req, timeout=2.5) as resp:
+            data = pyjson.loads(resp.read().decode())
+            display_name = data.get("display_name")
+            if display_name:
+                parts = [p.strip() for p in display_name.split(",")]
+                short_address = ", ".join(parts[:4]) if len(parts) >= 4 else display_name
+                return {
+                    "success": True,
+                    "address": short_address,
+                    "lat": lat,
+                    "lng": lng,
+                    "source": "geocoded"
+                }
+    except Exception:
+        pass
+
+    # 3. Fallback
+    fallback_name = f"Selected Pin ({lat:.4f}, {lng:.4f}), Telangana"
+    if closest and min_dist <= 4.0:
+        fallback_name = f"Near {closest['title']} ({lat:.4f}, {lng:.4f})"
+
+    return {
+        "success": True,
+        "address": fallback_name,
+        "lat": lat,
+        "lng": lng,
+        "source": "fallback"
     }
 
 @app.post("/api/auth/register")

@@ -14,9 +14,9 @@ const POPULAR_TELANGANA_SPOTS = [
   {
     title: 'BIET College (Bharat Institute of Eng & Tech)',
     subtitle: 'Mangalpally, Ibrahimpatnam, Ranga Reddy, Telangana',
-    address: 'Bharat Institute of Engineering and Technology (BIET), Ibrahimpatnam, Telangana',
-    lat: 17.1895,
-    lng: 78.6534,
+    address: 'Bharat Institute of Engineering and Technology (BIET), Mangalpally, Ibrahimpatnam, Telangana',
+    lat: 17.2056,
+    lng: 78.6007,
   },
   {
     title: 'Hitec City Cyber Towers',

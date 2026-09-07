@@ -141,17 +141,19 @@ export const MapView = ({
         />
         <ClickHandler onMapClick={onMapClick} />
 
-        {/* 2km Radius Circle around Pickup */}
+        {/* 2km Radius Circle around Pickup - interactive={false} so clicks pass through to map */}
         {hasPickup && (
           <Circle
             center={[pLat, pLng]}
             radius={2000}
+            interactive={false}
             pathOptions={{
               color: '#14b8a6',
               fillColor: '#14b8a6',
               fillOpacity: 0.09,
               weight: 1.5,
               dashArray: '6, 6',
+              interactive: false,
             }}
           />
         )}
@@ -181,13 +183,27 @@ export const MapView = ({
           </Marker>
         )}
 
-        {/* Drop Marker (Destination) */}
+        {/* Drop Marker (Destination) - Draggable so users can adjust destination anywhere */}
         {hasDrop && (
-          <Marker position={[dLat, dLng]} icon={dropIcon}>
+          <Marker 
+            position={[dLat, dLng]} 
+            icon={dropIcon}
+            draggable={!driverLocation}
+            eventHandlers={{
+              dragend: (e) => {
+                const marker = e.target;
+                const position = marker.getLatLng();
+                if (onMapClick) {
+                  onMapClick({ lat: position.lat, lng: position.lng });
+                }
+              },
+            }}
+          >
             <Popup>
               <div className="p-1 text-xs">
                 <p className="font-bold text-rose-600">Destination Drop</p>
                 <p className="text-slate-700 font-medium">{drop?.address || 'Drop Point'}</p>
+                <p className="text-[10px] text-teal-600 font-semibold mt-0.5">Drag to adjust exact spot</p>
               </div>
             </Popup>
           </Marker>
@@ -201,15 +217,17 @@ export const MapView = ({
           />
         )}
 
-        {/* Route Polyline */}
+        {/* Route Polyline - interactive={false} so clicks pass through to map */}
         {polylinePositions.length > 0 && (
           <Polyline
             positions={polylinePositions}
+            interactive={false}
             pathOptions={{
               color: '#0d9488',
               weight: 5,
               opacity: 0.85,
               dashArray: '8, 8',
+              interactive: false,
             }}
           />
         )}

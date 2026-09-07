@@ -626,7 +626,7 @@ async def test_race_condition_simulation():
     test_ride = {
         "vehicleType": "BIKE",
         "pickupLocation": {"address": "BN Reddy Nagar Bus Stop", "lat": 17.3228, "lng": 78.5630},
-        "dropLocation": {"address": "BIET College Ibrahimpatnam", "lat": 17.1895, "lng": 78.6534},
+        "dropLocation": {"address": "BIET College (Bharat Institute), Mangalpally, Ibrahimpatnam", "lat": 17.2056, "lng": 78.6007},
         "distanceKm": 16.5,
         "durationMinutes": 35,
         "fareBreakdown": {"totalFare": 175, "driverEarning": 140},

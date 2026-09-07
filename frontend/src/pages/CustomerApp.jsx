@@ -40,7 +40,7 @@ import {
 // Preset popular Telangana destinations for quick 1-click testing
 const QUICK_DESTINATIONS = [
   { name: 'BN Reddy Nagar Bus Stop', lat: 17.3228, lng: 78.5630, tag: 'Bus Stop' },
-  { name: 'BIET College (Bharat Institute), Ibrahimpatnam', lat: 17.1895, lng: 78.6534, tag: 'College' },
+  { name: 'BIET College (Bharat Institute), Mangalpally', lat: 17.2056, lng: 78.6007, tag: 'College' },
   { name: 'Hitec City Cyber Towers, Hyderabad', lat: 17.4504, lng: 78.3808, tag: 'IT Hub' },
   { name: 'Gachibowli Financial District, Hyderabad', lat: 17.4401, lng: 78.3489, tag: 'Work' },
   { name: 'Charminar, Old City, Hyderabad', lat: 17.3616, lng: 78.4747, tag: 'Heritage' },
@@ -64,9 +64,9 @@ export const CustomerApp = () => {
     lng: 78.5630,
   });
   const [drop, setDrop] = useState({
-    address: 'BIET College (Bharat Institute), Ibrahimpatnam, Telangana',
-    lat: 17.1895,
-    lng: 78.6534,
+    address: 'BIET College (Bharat Institute), Mangalpally, Ibrahimpatnam',
+    lat: 17.2056,
+    lng: 78.6007,
   });
 
   // Selected vehicle & estimates
@@ -312,14 +312,35 @@ export const CustomerApp = () => {
             vehicleType={activeRide?.vehicleType || vehicleType}
             nearbyCaptains={activeRide?.status === 'SEARCHING_DRIVER' ? (activeRide.broadcastCaptains || []) : []}
             className="w-full h-full"
-            onMapClick={(coords) => {
+            onMapClick={async (coords) => {
               if (!activeRide) {
+                const lat = Number(coords.lat);
+                const lng = Number(coords.lng);
+                const fallbackAddress = `Dropped Pin (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
+
+                // Immediately update drop location marker and coordinates
                 setDrop({
-                  address: `Selected Pin (${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)})`,
-                  lat: coords.lat,
-                  lng: coords.lng,
+                  address: fallbackAddress,
+                  lat,
+                  lng,
                 });
-                addToast('Drop location updated from map pin', 'info');
+                addToast('Drop pin updated on map', 'info');
+
+                // Fetch real place address via reverse geocoder
+                try {
+                  const res = await api.get(`/locations/reverse?lat=${lat}&lng=${lng}`);
+                  const resolvedAddress = res?.address || res?.data?.address;
+                  if (resolvedAddress) {
+                    setDrop({
+                      address: resolvedAddress,
+                      lat,
+                      lng,
+                    });
+                    addToast(`Destination set to ${resolvedAddress.split(',')[0]}`, 'success');
+                  }
+                } catch (err) {
+                  console.log('Reverse geocode error:', err);
+                }
               }
             }}
           />
