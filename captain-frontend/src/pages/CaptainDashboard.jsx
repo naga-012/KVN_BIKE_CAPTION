@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+
 import { useCaptainAuth } from '../context/CaptainAuthContext';
 import CaptainMap from '../components/CaptainMap';
 import ActiveRideSheet from '../components/ActiveRideSheet';
