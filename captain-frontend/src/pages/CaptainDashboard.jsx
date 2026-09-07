@@ -6,6 +6,8 @@ import RideRequestModal from '../components/RideRequestModal';
 import OtpVerificationModal from '../components/OtpVerificationModal';
 import CaptainChatModal from '../components/CaptainChatModal';
 import SafetyCenterModal from '../components/SafetyCenterModal';
+import ErrorBoundary from '../components/ErrorBoundary';
+
 import { 
   Power, 
   IndianRupee, 
@@ -54,13 +56,22 @@ export const CaptainDashboard = ({ onOpenScenarioTest }) => {
     <div className="relative flex-1 flex flex-col h-[calc(100vh-65px)] overflow-hidden">
       {/* Interactive Map Area */}
       <div className="flex-1 relative w-full h-full">
-        <CaptainMap 
-          activeRide={activeRide} 
-          incomingRequest={activeReq}
-          incomingRequests={incomingRequests}
-          currentRequestIndex={currentRequestIndex}
-          onSelectRequest={selectRequest}
-        />
+        <ErrorBoundary fallback={
+          <div className="w-full h-full bg-dark-900 flex flex-col items-center justify-center p-4 text-center text-slate-400">
+            <MapPin className="w-8 h-8 text-brand-400 mb-2 opacity-60" />
+            <p className="text-xs font-bold text-slate-300">Map View Initializing</p>
+            <p className="text-[11px] text-slate-500">Live order listening active within 2 KM radius.</p>
+          </div>
+        }>
+          <CaptainMap 
+            activeRide={activeRide} 
+            incomingRequest={activeReq}
+            incomingRequests={incomingRequests}
+            currentRequestIndex={currentRequestIndex}
+            onSelectRequest={selectRequest}
+          />
+        </ErrorBoundary>
+
 
         {/* Floating Multi-Ride Queue Bar (Visible when multiple requests are available or modal dismissed) */}
         {!activeRide && incomingRequests && incomingRequests.length > 0 && !isRequestModalOpen && (
@@ -136,7 +147,7 @@ export const CaptainDashboard = ({ onOpenScenarioTest }) => {
                     {isOnline ? (
                       <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-950/80 text-emerald-400 border border-emerald-500/30">
                         <MapPin className="w-3 h-3 text-emerald-400" />
-                        Exact GPS ({currentLocation.lat.toFixed(4)}, {currentLocation.lng.toFixed(4)}) • 2 KM Radius Active
+                        Exact GPS ({(currentLocation?.lat ?? 17.3228).toFixed(4)}, {(currentLocation?.lng ?? 78.5630).toFixed(4)}) • 2 KM Radius Active
                       </span>
                     ) : (
                       <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-950/70 text-amber-300 border border-amber-500/30">

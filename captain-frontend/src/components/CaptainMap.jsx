@@ -174,8 +174,9 @@ export const CaptainMap = ({
               <p className="font-bold text-slate-800">{captain?.name || 'Your Location'}</p>
               <p className="text-slate-600">{captain?.vehicle || 'KVN Vehicle'}</p>
               <p className="text-slate-500 font-mono text-[10px]">
-                {currentLocation.lat.toFixed(4)}, {currentLocation.lng.toFixed(4)}
+                {(currentLocation?.lat ?? 17.3228).toFixed(4)}, {(currentLocation?.lng ?? 78.5630).toFixed(4)}
               </p>
+
             </div>
           </Popup>
         </Marker>
