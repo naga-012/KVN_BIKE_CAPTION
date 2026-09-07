@@ -15,12 +15,14 @@ import {
   SkipForward,
   Layers,
   Sparkles,
+  Flag,
   X
 } from 'lucide-react';
 
 export const RideRequestModal = ({ request: propRequest, onClose }) => {
   const { 
     captain, 
+    currentLocation,
     incomingRequests, 
     currentRequestIndex, 
     nextRequest, 
@@ -88,6 +90,32 @@ export const RideRequestModal = ({ request: propRequest, onClose }) => {
   const paymentMethod = request.paymentMethod || 'UPI';
   const customerName = request.customerName || 'Customer';
   const customerRating = request.customerRating || 4.88;
+
+  // Calculate distance from Captain's current live location to Customer Pickup
+  const calculateDistanceKm = (lat1, lon1, lat2, lon2) => {
+    if (!lat1 || !lon1 || !lat2 || !lon2) return null;
+    const radlat1 = (Math.PI * lat1) / 180;
+    const radlat2 = (Math.PI * lat2) / 180;
+    const theta = lon1 - lon2;
+    const radtheta = (Math.PI * theta) / 180;
+    let dist = Math.sin(radlat1) * Math.sin(radlat2) + Math.cos(radlat1) * Math.cos(radlat2) * Math.cos(radtheta);
+    if (dist > 1) dist = 1;
+    dist = Math.acos(dist);
+    dist = (dist * 180) / Math.PI;
+    dist = dist * 60 * 1.1515 * 1.609344;
+    return Number(dist.toFixed(2));
+  };
+
+  const pLat = Number(request.pickupLocation?.lat);
+  const pLng = Number(request.pickupLocation?.lng);
+  const cLat = Number(currentLocation?.lat);
+  const cLng = Number(currentLocation?.lng);
+
+  const captainToPickupKm = (!isNaN(cLat) && !isNaN(cLng) && !isNaN(pLat) && !isNaN(pLng) && cLat !== 0 && pLat !== 0)
+    ? calculateDistanceKm(cLat, cLng, pLat, pLng)
+    : (request.pickupDistanceKm || 0.8);
+
+  const pickupEtaMins = Math.max(1, Math.round(captainToPickupKm * 2.5));
 
   // Handle Skip Ride
   const handleSkip = async () => {
@@ -255,8 +283,11 @@ export const RideRequestModal = ({ request: propRequest, onClose }) => {
             </div>
             <div className="text-right space-y-1">
               <div className="flex items-center gap-1.5 justify-end text-xs font-semibold text-slate-300">
-                <Navigation className="w-3.5 h-3.5 text-brand-400" />
-                <span>{distance} KM</span>
+                <Navigation className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="text-emerald-400 font-bold">{captainToPickupKm} KM pickup</span>
+                <span className="text-slate-500">•</span>
+                <Flag className="w-3.5 h-3.5 text-rose-400" />
+                <span className="text-rose-400 font-bold">{distance} KM drop</span>
                 <span className="text-slate-500">•</span>
                 <Clock className="w-3.5 h-3.5 text-brand-400" />
                 <span>~{duration} Mins</span>
@@ -290,16 +321,22 @@ export const RideRequestModal = ({ request: propRequest, onClose }) => {
             </div>
           </div>
 
-          {/* Route Details */}
-          <div className="space-y-3 bg-dark-900/50 p-3.5 rounded-2xl border border-dark-600/50 text-xs">
+          {/* Route Details: Exact Pickup KM from Captain and Drop Trip KM */}
+          <div className="space-y-3 bg-dark-900/60 p-3.5 rounded-2xl border border-dark-600/60 text-xs">
             {/* Pickup */}
             <div className="flex items-start gap-3">
               <div className="mt-0.5 flex flex-col items-center">
                 <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 ring-4 ring-emerald-400/20"></div>
-                <div className="w-0.5 h-7 bg-dark-600 my-0.5"></div>
+                <div className="w-0.5 h-9 bg-dark-600 my-0.5"></div>
               </div>
-              <div className="flex-1">
-                <p className="text-[10px] uppercase font-bold text-emerald-400 tracking-wider">Pickup</p>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-1 mb-0.5">
+                  <p className="text-[10px] uppercase font-black text-emerald-400 tracking-wider">Pickup Location</p>
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-mono font-bold text-[11px] border border-emerald-500/30">
+                    <Navigation className="w-3 h-3 text-emerald-400" />
+                    <span>{captainToPickupKm} KM from you (~{pickupEtaMins} min)</span>
+                  </span>
+                </div>
                 <p className="text-slate-200 font-medium line-clamp-1">{pickup}</p>
               </div>
             </div>
@@ -309,8 +346,14 @@ export const RideRequestModal = ({ request: propRequest, onClose }) => {
               <div className="mt-0.5">
                 <div className="w-2.5 h-2.5 rounded-full bg-rose-400 ring-4 ring-rose-400/20"></div>
               </div>
-              <div className="flex-1">
-                <p className="text-[10px] uppercase font-bold text-rose-400 tracking-wider">Destination</p>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-1 mb-0.5">
+                  <p className="text-[10px] uppercase font-black text-rose-400 tracking-wider">Destination Drop</p>
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 font-mono font-bold text-[11px] border border-rose-500/30">
+                    <Flag className="w-3 h-3 text-rose-400" />
+                    <span>{distance} KM trip (~{duration} min)</span>
+                  </span>
+                </div>
                 <p className="text-slate-200 font-medium line-clamp-1">{drop}</p>
               </div>
             </div>
