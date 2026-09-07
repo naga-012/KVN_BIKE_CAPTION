@@ -36,8 +36,10 @@ export const CaptainDashboard = ({ onOpenScenarioTest }) => {
     currentRequestIndex,
     selectRequest,
     skipRide,
+    detectLiveGpsLocation,
     setIncomingRequest 
   } = useCaptainAuth();
+
 
   const [isOtpModalOpen, setIsOtpModalOpen] = useState(false);
   const [isChatModalOpen, setIsChatModalOpen] = useState(false);
@@ -144,17 +146,29 @@ export const CaptainDashboard = ({ onOpenScenarioTest }) => {
                       : 'Turn on location and go online to receive nearby ride requests within 2 KM.'}
                   </p>
                   {/* GPS & 2KM Radius Status Badge */}
-                  <div className="mt-2 flex items-center gap-2">
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
                     {isOnline ? (
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-950/80 text-emerald-400 border border-emerald-500/30">
-                        <MapPin className="w-3 h-3 text-emerald-400" />
-                        Exact GPS ({(currentLocation?.lat ?? 17.3228).toFixed(4)}, {(currentLocation?.lng ?? 78.5630).toFixed(4)}) • 2 KM Radius Active
-                      </span>
+                      <>
+                        <button
+                          onClick={() => detectLiveGpsLocation && detectLiveGpsLocation(true)}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-950/80 hover:bg-emerald-900/90 text-emerald-300 border border-emerald-500/40 transition-all cursor-pointer shadow-sm group"
+                          title="Click to detect your exact live GPS location"
+                        >
+                          <MapPin className="w-3.5 h-3.5 text-emerald-400 group-hover:scale-110 transition-transform" />
+                          <span>Exact GPS ({(currentLocation?.lat ?? 17.3228).toFixed(4)}, {(currentLocation?.lng ?? 78.5630).toFixed(4)})</span>
+                          <span className="text-[10px] text-brand-400 underline font-bold ml-1">Update GPS</span>
+                        </button>
+                        <span className="text-[11px] font-medium text-slate-400">• 2 KM Radius Active</span>
+                      </>
                     ) : (
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-950/70 text-amber-300 border border-amber-500/30">
-                        <MapPin className="w-3 h-3 text-amber-400" />
-                        GPS Location Required to Go Online
-                      </span>
+                      <button
+                        onClick={() => detectLiveGpsLocation && detectLiveGpsLocation(true)}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-amber-950/70 hover:bg-amber-900/70 text-amber-300 border border-amber-500/40 transition-all cursor-pointer shadow-sm"
+                        title="Click to detect exact GPS location"
+                      >
+                        <MapPin className="w-3.5 h-3.5 text-amber-400" />
+                        <span>Detect Live GPS Location</span>
+                      </button>
                     )}
                   </div>
                 </div>

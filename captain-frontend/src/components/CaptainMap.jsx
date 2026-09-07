@@ -1,9 +1,11 @@
-import React, { useEffect, useRef } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
+import React, { useEffect, useRef, useState } from 'react';
+
+import { MapContainer, TileLayer, Marker, Popup, Polyline, Circle, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useCaptainAuth } from '../context/CaptainAuthContext';
-import { Navigation2, MapPin, Flag, Compass, ExternalLink } from 'lucide-react';
+import { Navigation2, MapPin, Flag, Compass, ExternalLink, Crosshair, LocateFixed } from 'lucide-react';
+
 
 // Custom KVN Vehicle Marker Icon
 const createCaptainMarkerIcon = (vehicleType = 'BIKE', isOnline = true) => {
@@ -114,6 +116,18 @@ function MapUpdater({ captainPos, pickupPos, dropPos, activeRide }) {
   return null;
 }
 
+// Smoothly fly to given coordinates when user requests GPS location
+function MapFlyToCoords({ coords, onFlyDone }) {
+  const map = useMap();
+  useEffect(() => {
+    if (coords && coords[0] && coords[1]) {
+      map.flyTo(coords, 16, { duration: 1.2 });
+      onFlyDone();
+    }
+  }, [coords, map, onFlyDone]);
+  return null;
+}
+
 export const CaptainMap = ({ 
   activeRide, 
   incomingRequest,
@@ -121,9 +135,23 @@ export const CaptainMap = ({
   currentRequestIndex = 0,
   onSelectRequest 
 }) => {
-  const { captain, currentLocation, isOnline } = useCaptainAuth();
+  const { captain, currentLocation, isOnline, updateLocation, detectLiveGpsLocation, addToast } = useCaptainAuth();
+  const [flyCoords, setFlyCoords] = useState(null);
+  const [isLocating, setIsLocating] = useState(false);
 
-  const captainPos = [currentLocation.lat || 17.3228, currentLocation.lng || 78.5630];
+  const handleLocateMe = async () => {
+    setIsLocating(true);
+    try {
+      const loc = await detectLiveGpsLocation(true);
+      if (loc && loc.lat && loc.lng) {
+        setFlyCoords([loc.lat, loc.lng]);
+      }
+    } finally {
+      setIsLocating(false);
+    }
+  };
+
+  const captainPos = [currentLocation?.lat || 17.3228, currentLocation?.lng || 78.5630];
 
   // Active ride locations or currently selected request locations
   const selectedReq = incomingRequests.length > 0 ? incomingRequests[currentRequestIndex] : incomingRequest;
@@ -163,23 +191,52 @@ export const CaptainMap = ({
         />
 
         <MapUpdater captainPos={captainPos} pickupPos={pickupPos} dropPos={dropPos} activeRide={activeRide} />
+        <MapFlyToCoords coords={flyCoords} onFlyDone={() => setFlyCoords(null)} />
 
-        {/* Captain Location Marker */}
+        {/* 2 KM Radius Visual Boundary Circle */}
+        {isOnline && (
+          <Circle
+            center={captainPos}
+            radius={2000}
+            pathOptions={{
+              color: '#F59E0B',
+              fillColor: '#F59E0B',
+              fillOpacity: 0.07,
+              weight: 1.5,
+              dashArray: '6, 8',
+            }}
+          />
+        )}
+
+        {/* Captain Location Marker (Draggable so captain can adjust location manually) */}
         <Marker
           position={captainPos}
+          draggable={true}
+          eventHandlers={{
+            dragend: (e) => {
+              const marker = e.target;
+              const pos = marker.getLatLng();
+              if (pos && pos.lat && pos.lng) {
+                updateLocation(pos.lat, pos.lng);
+                setFlyCoords([pos.lat, pos.lng]);
+                addToast(`📍 Captain GPS pinned to (${pos.lat.toFixed(4)}, ${pos.lng.toFixed(4)})`, 'info');
+              }
+            },
+          }}
           icon={createCaptainMarkerIcon(captain?.vehicleType || 'BIKE', isOnline)}
         >
           <Popup className="dark-popup">
-            <div className="p-1 text-xs">
+            <div className="p-1 text-xs space-y-1">
               <p className="font-bold text-slate-800">{captain?.name || 'Your Location'}</p>
               <p className="text-slate-600">{captain?.vehicle || 'KVN Vehicle'}</p>
-              <p className="text-slate-500 font-mono text-[10px]">
+              <p className="text-amber-600 font-mono text-[10px] font-bold">
                 {(currentLocation?.lat ?? 17.3228).toFixed(4)}, {(currentLocation?.lng ?? 78.5630).toFixed(4)}
               </p>
-
+              <p className="text-[10px] text-slate-400 italic">💡 Drag marker or tap "Live GPS" to pinpoint exact location</p>
             </div>
           </Popup>
         </Marker>
+
 
         {/* Multiple Incoming Ride Requests Markers (when captain is online and not on active trip) */}
         {!activeRide && incomingRequests && incomingRequests.length > 0 && (
@@ -293,8 +350,20 @@ export const CaptainMap = ({
           {captain?.plateNumber || 'TS 08 EA 4589'}
         </span>
       </div>
+
+      {/* Floating Live GPS Locate Me Button */}
+      <button
+        onClick={handleLocateMe}
+        disabled={isLocating}
+        className="absolute top-12 right-3 z-[1000] px-3 py-1.5 rounded-xl bg-dark-800/90 hover:bg-dark-700 text-brand-400 border border-brand-500/60 shadow-xl backdrop-blur-md transition-all flex items-center gap-1.5 group active:scale-95 cursor-pointer disabled:opacity-50"
+        title="Detect and pinpoint exact live device GPS location"
+      >
+        <Crosshair className={`w-3.5 h-3.5 text-brand-400 ${isLocating ? 'animate-spin' : 'group-hover:rotate-45 transition-transform'}`} />
+        <span className="text-xs font-black text-white tracking-wide">{isLocating ? 'Locating...' : 'Locate Me (GPS)'}</span>
+      </button>
     </div>
   );
 };
+
 
 export default CaptainMap;

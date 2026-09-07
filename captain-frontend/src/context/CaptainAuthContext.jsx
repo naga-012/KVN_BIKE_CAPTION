@@ -78,6 +78,69 @@ export const CaptainAuthProvider = ({ children }) => {
     }
   }, []);
 
+  // Query exact device GPS location
+  const detectLiveGpsLocation = useCallback(async (showFeedback = true) => {
+    if (!navigator.geolocation) {
+      if (showFeedback) addToast('GPS is not supported on this browser or device.', 'error');
+      return null;
+    }
+
+    if (showFeedback) addToast('📡 Fetching exact live GPS location...', 'info');
+
+    try {
+      const pos = await new Promise((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(
+          resolve,
+          reject,
+          { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+        );
+      });
+
+      const exactLoc = {
+        lat: pos.coords.latitude,
+        lng: pos.coords.longitude,
+        heading: pos.coords.heading || 0,
+        accuracy: pos.coords.accuracy,
+      };
+
+      setCurrentLocation(exactLoc);
+      setIsLocationActive(true);
+
+      const cptId = captain?.id || captain?._id || captain?.code || 'cpt_a';
+      socket.emit('captain:location', {
+        captainId: cptId,
+        lat: exactLoc.lat,
+        lng: exactLoc.lng,
+        heading: exactLoc.heading,
+      });
+
+      try {
+        await api.post('/captains/location', {
+          captainId: cptId,
+          lat: exactLoc.lat,
+          lng: exactLoc.lng,
+          heading: exactLoc.heading,
+        });
+      } catch (e) {
+        // non-blocking
+      }
+
+      if (showFeedback) {
+        addToast(`🎯 GPS Location Updated: (${exactLoc.lat.toFixed(4)}, ${exactLoc.lng.toFixed(4)}) • Accuracy ±${Math.round(pos.coords.accuracy || 10)}m`, 'success');
+      }
+      return exactLoc;
+    } catch (err) {
+      if (showFeedback) {
+        let msg = 'Could not retrieve GPS location.';
+        if (err.code === 1) msg = 'Location permission denied. Please allow location access in your browser.';
+        else if (err.code === 2) msg = 'Position unavailable. Please turn on device GPS/Location.';
+        else if (err.code === 3) msg = 'Location request timed out. Please retry.';
+        addToast(`⚠️ ${msg}`, 'warning');
+      }
+      return null;
+    }
+  }, [captain, addToast]);
+
   // Load initial captain data (default to Captain A if no login)
   useEffect(() => {
     const loadCaptain = async () => {
@@ -101,7 +164,10 @@ export const CaptainAuthProvider = ({ children }) => {
 
     loadCaptain();
     fetchAllCaptains();
-  }, [fetchAllCaptains]);
+    // Try auto-detecting real device location on load
+    detectLiveGpsLocation(false);
+  }, [fetchAllCaptains, detectLiveGpsLocation]);
+
 
   // Check for active ride periodically if captain is loaded
   const checkActiveRide = useCallback(async () => {
@@ -684,6 +750,8 @@ export const CaptainAuthProvider = ({ children }) => {
         currentLocation,
         setCurrentLocation,
         updateLocation,
+        detectLiveGpsLocation,
+
         activeRide,
         setActiveRide,
         incomingRequest,
