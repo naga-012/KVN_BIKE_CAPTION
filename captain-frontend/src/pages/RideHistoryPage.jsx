@@ -146,7 +146,7 @@ export const RideHistoryPage = () => {
 
       {/* Ride Detail Drawer / Modal */}
       {selectedRide && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
           <div className="w-full max-w-md bg-dark-800 border border-dark-600 rounded-3xl p-6 shadow-2xl space-y-4 animate-in zoom-in-95">
             <div className="flex items-center justify-between border-b border-dark-600/70 pb-3">
               <div>

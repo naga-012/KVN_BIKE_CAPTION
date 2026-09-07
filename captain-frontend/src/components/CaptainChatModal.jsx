@@ -86,7 +86,7 @@ export const CaptainChatModal = ({ ride, isOpen, onClose }) => {
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-black/80 backdrop-blur-sm animate-in fade-in">
+    <div className="fixed inset-0 z-[99999] flex items-center justify-center p-3 bg-black/80 backdrop-blur-sm animate-in fade-in">
       <div className="w-full max-w-md h-[550px] bg-dark-800 border border-dark-600 rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95">
         {/* Header */}
         <div className="p-4 bg-dark-900 border-b border-dark-600/70 flex items-center justify-between">

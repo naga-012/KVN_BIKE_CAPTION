@@ -53,7 +53,7 @@ export const SafetyCenterModal = ({ ride, isOpen, onClose }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
+    <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
       <div className="w-full max-w-md bg-dark-800 border border-rose-500/50 rounded-3xl p-6 shadow-2xl space-y-5 animate-in zoom-in-95">
         {/* Header */}
         <div className="flex items-center justify-between">

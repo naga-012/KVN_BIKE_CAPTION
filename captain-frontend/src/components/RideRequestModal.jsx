@@ -76,8 +76,15 @@ export const RideRequestModal = ({ request: propRequest, onClose }) => {
   const fare = request.estimatedFare || request.fareBreakdown?.totalFare || 50;
   const distance = request.distanceKm || 2.5;
   const duration = request.durationMinutes || 8;
-  const pickup = request.pickupLocation?.address || 'Pickup Point';
-  const drop = request.dropLocation?.address || 'Drop Destination';
+  const rawPickup = request.pickupLocation?.address || request.pickupAddress || 'Pickup Point';
+  const pickup = rawPickup.toLowerCase().trim() === 'current location'
+    ? (request.pickupLocation?.landmark 
+        ? `Current Location (${request.pickupLocation.landmark})` 
+        : (request.pickupLocation?.lat && request.pickupLocation?.lng 
+            ? `Customer Live GPS (${Number(request.pickupLocation.lat).toFixed(4)}, ${Number(request.pickupLocation.lng).toFixed(4)})` 
+            : 'Customer Live GPS Location'))
+    : rawPickup;
+  const drop = request.dropLocation?.address || request.dropAddress || 'Drop Destination';
   const paymentMethod = request.paymentMethod || 'UPI';
   const customerName = request.customerName || 'Customer';
   const customerRating = request.customerRating || 4.88;
@@ -141,11 +148,11 @@ export const RideRequestModal = ({ request: propRequest, onClose }) => {
   const percentLeft = (timeLeft / 15) * 100;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-3 bg-black/80 backdrop-blur-sm animate-in fade-in">
-      <div className="w-full max-w-lg bg-dark-800 border-2 border-brand-500 rounded-3xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom-6">
+    <div className="fixed inset-0 z-[99999] flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-in fade-in">
+      <div className="w-full max-w-lg max-h-[92vh] flex flex-col bg-dark-800 border-2 border-brand-500 rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95">
         
         {/* Top Header with Synchronized Countdown Bar */}
-        <div className="bg-gradient-to-r from-brand-600 via-brand-500 to-amber-500 p-3.5 text-dark-900">
+        <div className="bg-gradient-to-r from-brand-600 via-brand-500 to-amber-500 p-3.5 text-dark-900 flex-shrink-0">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="animate-ping-slow inline-flex h-3 w-3 rounded-full bg-dark-900"></span>
@@ -236,7 +243,7 @@ export const RideRequestModal = ({ request: propRequest, onClose }) => {
         )}
 
         {/* Content Body */}
-        <div className="p-4 md:p-5 space-y-4">
+        <div className="p-4 md:p-5 space-y-4 flex-1 overflow-y-auto">
           {/* Fare and Trip Stats */}
           <div className="flex items-center justify-between bg-dark-900/70 p-4 rounded-2xl border border-dark-600/70">
             <div>

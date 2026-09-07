@@ -245,7 +245,7 @@ export const ActiveRideSheet = ({
 
       {/* Ride Completion Receipt Modal */}
       {completedSummary && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
           <div className="w-full max-w-md bg-dark-800 border border-brand-500/50 rounded-3xl p-6 shadow-2xl space-y-5 animate-in zoom-in-95">
             <div className="text-center space-y-1">
               <div className="w-14 h-14 rounded-full bg-emerald-500/20 border border-emerald-500 text-emerald-400 flex items-center justify-center mx-auto text-2xl">
