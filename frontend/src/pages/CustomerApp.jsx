@@ -57,16 +57,16 @@ export const CustomerApp = () => {
   const [activeTab, setActiveTab] = useState('BOOKING');
 
 
-  // Booking locations (Telangana - defaults to BN Reddy Bus Stop & BIET College)
+  // Booking locations (initially empty)
   const [pickup, setPickup] = useState({
-    address: 'BN Reddy Nagar Bus Stop, Hyderabad, Telangana',
-    lat: 17.3228,
-    lng: 78.5630,
+    address: '',
+    lat: null,
+    lng: null,
   });
   const [drop, setDrop] = useState({
-    address: 'BIET College (Bharat Institute), Mangalpally, Ibrahimpatnam',
-    lat: 17.2056,
-    lng: 78.6007,
+    address: '',
+    lat: null,
+    lng: null,
   });
 
   // Selected vehicle & estimates
@@ -105,7 +105,10 @@ export const CustomerApp = () => {
 
   // Fetch fare estimates from Python FastAPI
   const fetchEstimates = async () => {
-    if (!pickup?.lat || !drop?.lat) return;
+    if (!pickup?.lat || !drop?.lat) {
+      setEstimates(null);
+      return;
+    }
     setEstimatesLoading(true);
     try {
       const res = await api.post('/rides/estimate', {
@@ -123,29 +126,6 @@ export const CustomerApp = () => {
       setEstimatesLoading(false);
     }
   };
-
-  // Auto-detect customer GPS location on mount if available
-  useEffect(() => {
-    if (typeof window !== 'undefined' && 'geolocation' in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const lat = pos.coords.latitude;
-          const lng = pos.coords.longitude;
-          console.log('[CustomerApp] Auto-detected customer GPS location:', lat, lng);
-          setPickup((prev) => ({
-            ...prev,
-            lat,
-            lng,
-            address: prev.address === 'BN Reddy Nagar Bus Stop, Hyderabad, Telangana' ? 'Current Location' : prev.address
-          }));
-        },
-        (err) => {
-          console.log('[CustomerApp] Geolocation fallback to default:', err.message);
-        },
-        { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }
-      );
-    }
-  }, []);
 
   useEffect(() => {
     fetchEstimates();
@@ -210,6 +190,10 @@ export const CustomerApp = () => {
   const handleConfirmRide = async () => {
     if (!user) {
       addToast('Please login to book a ride', 'info');
+      return;
+    }
+    if (!pickup?.address || !pickup?.lat || !drop?.address || !drop?.lat) {
+      addToast('Please enter both pickup and destination locations', 'warning');
       return;
     }
     setBookingLoading(true);
@@ -688,7 +672,9 @@ export const CustomerApp = () => {
                     <div className="flex justify-between items-center text-xs font-bold text-slate-300">
                       <span>Available Rides</span>
                       <span className="text-[11px] font-medium text-slate-400">
-                        {estimates ? `${estimates.BIKE?.distanceKm} km • ~${estimates.BIKE?.durationMinutes} mins` : 'Estimating...'}
+                        {estimates
+                          ? `${estimates.BIKE?.distanceKm} km • ~${estimates.BIKE?.durationMinutes} mins`
+                          : (pickup?.address && drop?.address ? 'Estimating fare...' : 'Enter pickup & drop locations')}
                       </span>
                     </div>
 
@@ -713,13 +699,13 @@ export const CustomerApp = () => {
                             </div>
                             <div className="text-[11px] text-slate-400">Beat city traffic • 1 Person</div>
                             <div className="text-[10px] text-teal-400 font-semibold mt-0.5">
-                              ETA {estimates?.BIKE?.etaMinutes || 3} mins away
+                              {estimates?.BIKE?.etaMinutes ? `ETA ${estimates.BIKE.etaMinutes} mins away` : 'Fast pickup nearby'}
                             </div>
                           </div>
                         </div>
                         <div className="text-right">
                           <div className="text-base font-black text-white">
-                            ₹{estimates?.BIKE?.fare?.totalFare || 81}
+                            {estimates?.BIKE?.fare?.totalFare ? `₹${estimates.BIKE.fare.totalFare}` : '--'}
                           </div>
                         </div>
                       </div>
@@ -744,13 +730,13 @@ export const CustomerApp = () => {
                             </div>
                             <div className="text-[11px] text-slate-400">Pocket friendly • 3 Persons</div>
                             <div className="text-[10px] text-teal-400 font-semibold mt-0.5">
-                              ETA {estimates?.AUTO?.etaMinutes || 2} mins away
+                              {estimates?.AUTO?.etaMinutes ? `ETA ${estimates.AUTO.etaMinutes} mins away` : 'Auto nearby'}
                             </div>
                           </div>
                         </div>
                         <div className="text-right">
                           <div className="text-base font-black text-white">
-                            ₹{estimates?.AUTO?.fare?.totalFare || 124}
+                            {estimates?.AUTO?.fare?.totalFare ? `₹${estimates.AUTO.fare.totalFare}` : '--'}
                           </div>
                         </div>
                       </div>
@@ -775,13 +761,13 @@ export const CustomerApp = () => {
                             </div>
                             <div className="text-[11px] text-slate-400">Chilled AC hatchback • 4 Persons</div>
                             <div className="text-[10px] text-teal-400 font-semibold mt-0.5">
-                              ETA {estimates?.CAB?.etaMinutes || 4} mins away
+                              {estimates?.CAB?.etaMinutes ? `ETA ${estimates.CAB.etaMinutes} mins away` : 'Cab on standby'}
                             </div>
                           </div>
                         </div>
                         <div className="text-right">
                           <div className="text-base font-black text-white">
-                            ₹{estimates?.CAB?.fare?.totalFare || 186}
+                            {estimates?.CAB?.fare?.totalFare ? `₹${estimates.CAB.fare.totalFare}` : '--'}
                           </div>
                         </div>
                       </div>
@@ -835,10 +821,16 @@ export const CustomerApp = () => {
                   {/* BOOK RIDE BUTTON */}
                   <button
                     onClick={handleConfirmRide}
-                    disabled={bookingLoading || estimatesLoading}
-                    className="w-full py-4 rounded-2xl bg-gradient-to-r from-teal-500 to-teal-400 hover:from-teal-400 hover:to-teal-300 text-slate-950 font-black text-sm tracking-wider shadow-glow flex items-center justify-center gap-2 transition-all active:scale-98 disabled:opacity-50"
+                    disabled={bookingLoading || estimatesLoading || !pickup?.lat || !drop?.lat}
+                    className="w-full py-4 rounded-2xl bg-gradient-to-r from-teal-500 to-teal-400 hover:from-teal-400 hover:to-teal-300 text-slate-950 font-black text-sm tracking-wider shadow-glow flex items-center justify-center gap-2 transition-all active:scale-98 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <span>{bookingLoading ? 'DISPATCHING...' : `CONFIRM ${vehicleType} RIDE`}</span>
+                    <span>
+                      {bookingLoading
+                        ? 'DISPATCHING...'
+                        : !pickup?.lat || !drop?.lat
+                        ? 'ENTER PICKUP & DROP LOCATIONS'
+                        : `CONFIRM ${vehicleType} RIDE`}
+                    </span>
                     <ChevronRight className="w-4 h-4" />
                   </button>
 

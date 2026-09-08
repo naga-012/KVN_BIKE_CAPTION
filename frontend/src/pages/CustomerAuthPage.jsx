@@ -11,6 +11,8 @@ import {
   Sparkles,
   MapPin,
   CheckCircle2,
+  AlertCircle,
+  KeyRound,
 } from 'lucide-react';
 
 export const CustomerAuthPage = () => {
@@ -20,7 +22,7 @@ export const CustomerAuthPage = () => {
   // Mode: 'LOGIN' | 'REGISTER' | 'OTP'
   const [mode, setMode] = useState('LOGIN');
 
-  // Input states - initialized completely empty (no prefilled mock details)
+  // Input states - initialized empty
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
@@ -28,39 +30,103 @@ export const CustomerAuthPage = () => {
   const [email, setEmail] = useState('');
   const [otp, setOtp] = useState('');
   const [otpSent, setOtpSent] = useState(false);
+  const [authError, setAuthError] = useState('');
+  const [showDemoHelp, setShowDemoHelp] = useState(false);
+
+  const fillDemoAccount = (ident, pass) => {
+    setMode('LOGIN');
+    setIdentifier(ident);
+    setPassword(pass);
+    setAuthError('');
+    addToast(`Loaded test account: ${ident}`, 'info');
+  };
+
+  const handleModeChange = (newMode) => {
+    setMode(newMode);
+    setAuthError('');
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setAuthError('');
+
     try {
       if (mode === 'LOGIN') {
-        if (!identifier.trim() || !password) {
-          addToast('Please enter your mobile number or email and password', 'error');
+        const cleanIdent = identifier.trim();
+        if (!cleanIdent || !password) {
+          const msg = 'Please enter your mobile number or email and password';
+          setAuthError(msg);
+          addToast(msg, 'error');
           return;
         }
-        const loggedUser = await login(identifier.trim(), password);
+        const loggedUser = await login(cleanIdent, password);
         addToast(`Welcome back, ${loggedUser.name}!`, 'success');
       } else if (mode === 'REGISTER') {
-        if (!name.trim() || !phone.trim() || !email.trim() || !password) {
-          addToast('Please fill in all registration fields', 'error');
+        const cleanName = name.trim();
+        const cleanPhone = phone.trim();
+        const cleanEmail = email.trim();
+
+        if (!cleanName || !cleanPhone || !cleanEmail || !password) {
+          const msg = 'Please fill in all registration fields';
+          setAuthError(msg);
+          addToast(msg, 'error');
           return;
         }
+
+        const digitsOnly = cleanPhone.replace(/\D/g, '');
+        if (digitsOnly.length < 10) {
+          const msg = 'Please enter a valid 10-digit mobile number';
+          setAuthError(msg);
+          addToast(msg, 'error');
+          return;
+        }
+
+        if (!cleanEmail.includes('@') || !cleanEmail.includes('.')) {
+          const msg = 'Please enter a valid email address';
+          setAuthError(msg);
+          addToast(msg, 'error');
+          return;
+        }
+
+        if (password.length < 4) {
+          const msg = 'Password should be at least 4 characters long';
+          setAuthError(msg);
+          addToast(msg, 'error');
+          return;
+        }
+
         const newUser = await register({
-          name: name.trim(),
-          phone: phone.trim(),
-          email: email.trim(),
+          name: cleanName,
+          phone: cleanPhone,
+          email: cleanEmail,
           password,
         });
         addToast(`Account created! Welcome to KVN, ${newUser.name}!`, 'success');
       } else if (mode === 'OTP') {
-        if (!phone.trim() || !otp.trim()) {
-          addToast('Please enter your mobile number and 4-digit OTP', 'error');
+        const cleanPhone = phone.trim();
+        const cleanOtp = otp.trim();
+
+        if (!cleanPhone || cleanPhone.replace(/\D/g, '').length < 10) {
+          const msg = 'Please enter a valid 10-digit mobile number';
+          setAuthError(msg);
+          addToast(msg, 'error');
           return;
         }
-        const user = await loginWithOtp(phone.trim(), otp.trim(), name.trim());
+
+        if (!cleanOtp) {
+          const msg = 'Please enter the 4-digit OTP (Click "Get OTP" for demo code)';
+          setAuthError(msg);
+          addToast(msg, 'error');
+          return;
+        }
+
+        const user = await loginWithOtp(cleanPhone, cleanOtp, name.trim());
         addToast(`Verified successfully! Welcome, ${user.name}!`, 'success');
       }
     } catch (err) {
-      addToast(err.message || 'Authentication failed. Please check your credentials.', 'error');
+      const errMsg = err.message || 'Authentication failed. Please check your credentials.';
+      setAuthError(errMsg);
+      addToast(errMsg, 'error');
     }
   };
 
@@ -134,7 +200,7 @@ export const CustomerAuthPage = () => {
           <div className="flex bg-slate-800/80 p-1 rounded-xl mb-6 text-xs font-bold border border-slate-700/40">
             <button
               type="button"
-              onClick={() => { setMode('LOGIN'); }}
+              onClick={() => handleModeChange('LOGIN')}
               className={`flex-1 py-2 rounded-lg transition-all ${
                 mode === 'LOGIN'
                   ? 'bg-teal-500 text-slate-950 shadow-md'
@@ -145,7 +211,7 @@ export const CustomerAuthPage = () => {
             </button>
             <button
               type="button"
-              onClick={() => { setMode('REGISTER'); }}
+              onClick={() => handleModeChange('REGISTER')}
               className={`flex-1 py-2 rounded-lg transition-all ${
                 mode === 'REGISTER'
                   ? 'bg-teal-500 text-slate-950 shadow-md'
@@ -156,7 +222,7 @@ export const CustomerAuthPage = () => {
             </button>
             <button
               type="button"
-              onClick={() => { setMode('OTP'); }}
+              onClick={() => handleModeChange('OTP')}
               className={`flex-1 py-2 rounded-lg transition-all ${
                 mode === 'OTP'
                   ? 'bg-teal-500 text-slate-950 shadow-md'
@@ -166,6 +232,14 @@ export const CustomerAuthPage = () => {
               Mobile OTP
             </button>
           </div>
+
+          {/* Inline Error Alert Banner */}
+          {authError && (
+            <div className="mb-4 p-3 rounded-2xl bg-rose-500/15 border border-rose-500/40 flex items-start gap-2.5 text-rose-300 text-xs animate-shake">
+              <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+              <div className="flex-1 font-medium leading-relaxed">{authError}</div>
+            </div>
+          )}
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-4 text-xs">
@@ -380,7 +454,7 @@ export const CustomerAuthPage = () => {
                     Don't have an account?{' '}
                     <button
                       type="button"
-                      onClick={() => setMode('REGISTER')}
+                      onClick={() => handleModeChange('REGISTER')}
                       className="text-teal-400 font-bold hover:underline"
                     >
                       Create Account
@@ -390,7 +464,7 @@ export const CustomerAuthPage = () => {
                     Or use{' '}
                     <button
                       type="button"
-                      onClick={() => setMode('OTP')}
+                      onClick={() => handleModeChange('OTP')}
                       className="text-teal-400 font-bold hover:underline"
                     >
                       Quick Mobile OTP Login
@@ -403,7 +477,7 @@ export const CustomerAuthPage = () => {
                   Already have an account?{' '}
                   <button
                     type="button"
-                    onClick={() => setMode('LOGIN')}
+                    onClick={() => handleModeChange('LOGIN')}
                     className="text-teal-400 font-bold hover:underline"
                   >
                     Sign In
@@ -415,7 +489,7 @@ export const CustomerAuthPage = () => {
                   Prefer password login?{' '}
                   <button
                     type="button"
-                    onClick={() => setMode('LOGIN')}
+                    onClick={() => handleModeChange('LOGIN')}
                     className="text-teal-400 font-bold hover:underline"
                   >
                     Sign In with Password
@@ -425,8 +499,53 @@ export const CustomerAuthPage = () => {
             </div>
           </form>
 
+          {/* Quick Demo Test Accounts Drawer (Keeps fields empty by default, provides 1-tap fill for quick testing) */}
+          <div className="mt-5 pt-3 border-t border-slate-800/80">
+            <button
+              type="button"
+              onClick={() => setShowDemoHelp((prev) => !prev)}
+              className="w-full flex items-center justify-between text-[11px] text-slate-400 hover:text-slate-200 transition-colors py-1 px-1 rounded-lg hover:bg-slate-800/40"
+            >
+              <span className="flex items-center gap-1.5 font-semibold text-teal-400">
+                <KeyRound className="w-3.5 h-3.5" />
+                <span>Test Rider Accounts</span>
+              </span>
+              <span className="text-[10px] bg-slate-800 border border-slate-700/60 px-2 py-0.5 rounded-full text-slate-300">
+                {showDemoHelp ? 'Hide Test Accounts' : 'Show Test Accounts'}
+              </span>
+            </button>
+
+            {showDemoHelp && (
+              <div className="mt-2.5 grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+                <button
+                  type="button"
+                  onClick={() => fillDemoAccount('9876543210', 'Password@123')}
+                  className="p-2.5 rounded-xl bg-slate-800/60 border border-slate-700/70 hover:border-teal-500/60 text-left transition-all group hover:bg-slate-800"
+                >
+                  <div className="font-bold text-white group-hover:text-teal-400 flex items-center justify-between">
+                    <span>Rahul Sharma</span>
+                    <span className="text-[9px] bg-teal-500/20 text-teal-300 px-1.5 py-0.5 rounded font-mono font-semibold">1-Click Fill</span>
+                  </div>
+                  <div className="text-[10px] text-slate-400 mt-0.5 font-mono">9876543210 • Password@123</div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => fillDemoAccount('9121792433', 'naga@012')}
+                  className="p-2.5 rounded-xl bg-slate-800/60 border border-slate-700/70 hover:border-teal-500/60 text-left transition-all group hover:bg-slate-800"
+                >
+                  <div className="font-bold text-white group-hover:text-teal-400 flex items-center justify-between">
+                    <span>Nagarjun</span>
+                    <span className="text-[9px] bg-teal-500/20 text-teal-300 px-1.5 py-0.5 rounded font-mono font-semibold">1-Click Fill</span>
+                  </div>
+                  <div className="text-[10px] text-slate-400 mt-0.5 font-mono">9121792433 • naga@012</div>
+                </button>
+              </div>
+            )}
+          </div>
+
           {/* Safety footer */}
-          <div className="mt-6 pt-4 border-t border-slate-800/80 flex items-center justify-center gap-2 text-slate-400 text-[11px]">
+          <div className="mt-4 pt-3 border-t border-slate-800/60 flex items-center justify-center gap-2 text-slate-400 text-[11px]">
             <ShieldCheck className="w-4 h-4 text-teal-400 shrink-0" />
             <span>Encrypted login • 24/7 Verified Driver Partners</span>
           </div>
